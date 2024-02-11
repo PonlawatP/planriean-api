@@ -1,3 +1,7 @@
+# VN-Reg Web-Scraping Script
+# PlutoPon
+# เขียนไทยเพื่อให้ง่ายต่อการทำความเข้าใจ เพราะมันคือ Project จบ
+
 import re
 import json
 from bs4 import BeautifulSoup
@@ -6,12 +10,7 @@ import threading
 import psycopg2
 import configparser
 
-# Load config
-config = configparser.ConfigParser()
-config.read('webscraping.ini')
-# Get config
-year = config['config'].get('year')
-semester = config['config'].get('semester')
+from urllib.parse import urlparse, parse_qs
 
 # Set headers
 headers = {
@@ -36,11 +35,13 @@ query_schema = 'SET search_path to ' + schema_name + ';'
 # connect to the database
 con = psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host)
 
-
+# Class นี้เขียนเพื่อจะใช้กับระบบทะเบียนของมหาวิทยาลัยมหาสารคาม หากต้องการแก้ไขเพื่อใช้กับมหาวิทยาลัยอื่นๆ อาจต้องพิจารณาตามความเหมาะสมของโครงเว็บในมหาวิทยาลัยนั้นๆ ด้วย
 class MSU:
-    # init data
-    ge_data_all = []
-
+    # getUniversityID
+    # ดึง id ของมหาวิทยาลัย
+    # params
+        # - name
+            # ชื่อย่อมหาลัย เช่น "MSU"
     def getUniversityID(name):
         cur = con.cursor()
         query = f'{query_schema} select uni_id from university_detail where uni_key = \'{name}\';'
@@ -50,7 +51,11 @@ class MSU:
         con.commit()
         return university_id
 
-    # Information process data into database
+    # scrap_fac_data
+    # ดึงข้อมูลคณะเฉยๆ ยังไม่ได้ใช้
+    # ประกอบด้วย
+        # - รหัสคณะ
+        # - ชื่อคณะ
     def scrap_fac_data():
         # set post data
         f_data = {
@@ -65,131 +70,30 @@ class MSU:
             print(f"Error: {response.status_code}")
             return
 
-        # convert from windows-874 charset to utf-8
-        response.encoding = "windows-874"
-
-        content_windows874 = response.content
-        content_utf8 = content_windows874.decode("TIS-620").encode("utf-8")
-
         # BeautifulSoup
-        resp = BeautifulSoup(content_utf8, 'html.parser')
-
+        resp = BeautifulSoup(response.content, 'html5lib')
 
         # select table by CSS selector
-        soup = resp.select_one('body > div.contenttive > div > div.main > div > div > form > table > tr > td > font > select > option')
+        soup = resp.select('body > div.contenttive > div > div.main > div > div > form > table > tbody > tr > td:nth-child(2) > font > select > option')
+        for row in soup:
+            value = row['value']
+            name = row.text.split(" : ")[1].strip()
+            print(value, name)
 
-
-        html_options = re.sub(r'</option>', r'</option>\n', soup.decode_contents())
-        # print(html_options)
-
-        soup = BeautifulSoup(f'<option value="1">{html_options}', 'html.parser')
-        print(soup)
-
-        options_list = []
-        for option in soup.find_all('option'):
-            value = option['value']
-            name_th = option.text.split(' : ')[1]
-            print(value)
-            options_list.append({'name_th': name_th, 'value': int(value)})
-
-        print(options_list)
-        # Remove numeric part from the end of each 'name_th' value
-        for entry in options_list:
-            entry['name_th'] = re.sub(r'\d+$', '', entry['name_th'])
-
-        # Print the modified data
-        print(options_list)
-        #     cells = row.find_all('td')
-        #     code = cells[1].find('a').text.strip()
-        #     subject_data = cells[2].decode_contents().split("<br/>")
-        #     # TODO: มี font หลุดเข้ามาบางอัน
-        #     name = subject_data[0].split("<font")[0]
-        #     credit = cells[3].text.strip()
-        #     time = cells[4].text.strip()
-        #     sec = int(cells[5].text.strip())
-        #     remain = int(cells[8].text.strip())
-        #     receive = int(cells[6].text.strip())
-
-        #     lecturer_raw = subject_data[0]
-        #     try:
-        #         lecturer_raw = subject_data[1]
-        #     except:
-        #         pass
-        #     # Extract the <font> elements within the outer <font> element
-        #     font_elements = re.findall(r'<font[^>]*>.*?</font>', lecturer_raw)
-        #     # Extract the text content of the <li> elements
-        #     li_text = [li for font in font_elements for li in re.findall(r'<li>.*?</li>', font)]
-        #     # Remove the <li> tags from the extracted text
-        #     li_text = [re.findall(r'<li>(.*?)<\/li>', nameLecture)[0].replace('<li>', ' / ') for nameLecture in li_text]
-        #     # Join the extracted text with a delimiter
-        #     lecturer = ' / '.join(li_text)
-
-        #     # Find the first <font> element
-        #     first_font = re.search(r'<font[^>]*>(.*?)</font>', lecturer_raw)
-
-        #     # Remove any nested <font> elements within the first <font> element
-        #     content = re.sub(r'<font[^>]*>.*?</font>', '', first_font.group(1))
-        #     # Find the content before the <font> tag
-        #     match = re.search(r'(.*?)<font', content)
-
-        #     # Extract the content
-        #     if match:
-        #         content = match.group(1)
-        #     else:
-        #         content = ""
-
-        #     mid = None
-        #     final = None
-
-        #     try:
-        #         split_data = time.split("สอบปลายภาค")
-        #         mid = split_data[0].strip().split("สอบกลางภาค")[1].strip()
-        #     except:
-        #         pass
-
-        #     try:
-        #         split_data = time.split("สอบปลายภาค")
-        #         final = split_data[1].strip()
-        #     except:
-        #         pass
-
-
-        #     try:
-        #         split_data = time.split("สอบกลางภาค")
-        #         time = split_data[0].strip()
-        #     finally:
-        #         try:
-        #             split_data = time.split("สอบปลายภาค")
-        #             time = split_data[0].strip()
-        #         except:
-        #             pass
-
-        #     # Define the regular expression pattern
-        #     pattern = r'(\d+)([A-Za-z])'
-        #     # Find all matches in the string
-        #     matches = re.findall(pattern, time)
-        #     # Insert "&" between the number and alphabet character
-        #     time = re.sub(pattern, r'\1 & \2', time)
-
-        #     # set type
-        #     type = "GE-"+code[3:4]
-
-        #     # Create a dictionary for each course and append it to the data list
-        #     course = {
-        #         'type': type,
-        #         'code': code,
-        #         'name': name,
-        #         'note': content,
-        #         'credit': credit,
-        #         'time': time,
-        #         'sec': sec,
-        #         'remain':remain,
-        #         'receive': receive,
-        #         'mid': mid,
-        #         'final': final,
-        #         'lecturer': lecturer
-        #     }
-        #     self.dataALL.append(course)
+    # scrap_courseset_list
+    # ดึงข้อมูลรายการหลักสูตรของคณะมาเก็บไว้ก่อน
+    # ประกอบด้วย : ทั้งหมดเก็บใน courseset_detail
+        # - รหัสหลักสูตร
+        # - ชื่อหลักสูตร
+        # - อักษรย่อ
+        # - หน่วยกิต
+        # - ปีการศึกษา
+        # - เกรดต่ำที่สุด
+        # - ลิ้งค์ไปยังข้อมูลหลักสูตร
+    # และแยกประเภทของ หลักสูตรนั้นๆ ด้วย โดยจะเก็บข้อมูลประเภทไว้ใน courseset_group
+    # params
+        # - facultyid = 12
+            # รหัสประจำคณะ เช่น คณะวิทยาการสารสนเทศ = 12
     def scrap_courseset_list(facultyid = 12):
         # set post data
         f_data = {
@@ -198,12 +102,14 @@ class MSU:
         
         def run(lang = 'th'):
             # request web page with post method
+            # ส่งค่าจาก f_data ไปเพื่อรับค่าจาก web กลับมา
             response = requests.post('https://reg.msu.ac.th/registrar/program_info.asp', headers=headers, data=f_data)
             # check status
             if response.status_code != 200:
                 print(f"Error: {response.status_code}")
                 return
 
+            # ตอนแรกใช้ bs แบบ html.parser เลยต้อง convert charset เพื่อให้ภาษาไทยไม่เป็นภาษาต่างดาว
             # convert from windows-874 charset to utf-8
             response.encoding = "windows-874"
 
@@ -215,22 +121,16 @@ class MSU:
 
 
             # select table by CSS selector
+            # การทำงานคือ soup จะเข้าตามลำดับ element ลงไปเรื่อย ๆ จนถึงลำดับสุดท้ายที่เราเขียนไว้
             soup = resp.select_one('body > div.contenttive > div > div.main > div > div > table')
 
-            # print(soup)
             # Find all rows in the table
             rows = soup.find_all('tr', class_='normalDetail')
 
-            # print(rows)
-
-            # Print the modified data
-            # print(rows)
-
-            cur = con.cursor()
-            
             university_id = MSU.getUniversityID("MSU")
             current_header_id = 0
 
+            cur = con.cursor()
             for row in rows:
                 cell = row.find('td')
                 c_a = cell.find('a')
@@ -285,7 +185,19 @@ class MSU:
 
         run('th')
         # run('en')
-    def scrap_courseset_detail(facultyid = 12, courseset_id = 1126502):
+
+    # scrap_courseset_detail
+    # ดึงข้อมูลแผนหลักสูตรมาเก็บไว้
+    # ประกอบด้วย
+        # - หัวข้อของกลุ่มรายวิชาแต่ละหลักสูตร (สามารถซ้อนกันได้) : เก็บใน courseset_detail
+            # - หน่วยกิตรวมของกลุ่มรายวิชา : เก็บใน courseset_detail
+            # - ข้อมูลรายวิชาในกลุ่มของรายวิชาของหลักสูตร : เก็บใน courseset_subject
+    # params
+        # - facultyid = 12
+            # รหัสประจำคณะ เช่น คณะวิทยาการสารสนเทศ = 12
+        # - courseset_id = 12
+            # รหัสหลักสูตรของภาควิชา เช่น หลักสูตรวิทยาการคอมพิวเตอร์ ปี 63 = 1126302
+    def scrap_courseset_detail(facultyid = 12, courseset_id = 1126302):
         # set post data
         f_data = {
             'facultyid': facultyid,
@@ -351,7 +263,7 @@ class MSU:
                     name_res = re.sub(r"\s+", " ", t_sets[0].text.strip())
 
                     cr_head_id = name_res.split(" ")[0]
-                    cr_name_th = name_res.split(" ")[1]
+                    cr_name_th = ' '.join(name_res.split(" ")[1:])
                     cr_min_credit_ref = t_sets[1].text.split(" : ")[1].strip()
                     if cr_min_credit_ref == "-":
                         cr_min_credit_ref = None
@@ -392,55 +304,87 @@ class MSU:
         run('th')
         # run('en')
 
-    # GE process data
-    def scrap_ge_data(self, f_data: str = None, coursecode:str = "004*"):
+    # scrap_courses_data
+    # ดึงข้อมูลของรายวิชาที่ต้องการค้นหาในแต่ละเทอมปีการศึกษามาเก็บไว้
+    # ประกอบด้วย : เก็บใน course_detail
+        # - เลขประจำมหาวิทยาลัย
+        # - ปีการศึกษา
+        # - เทอม
+        # - รหัสรายวิชา
+        # - ชื่อรายวิชา
+        # - ข้อมูลหมายเหตุ (ถ้ามี)
+        # - หน่วยกิต
+        # - วันและเวลาที่เรียน
+        # - ชื่ออาจารย์
+        # - กลุ่มเรียน
+        # - วันที่สอบกลางภาค
+        # - วันที่สอบปลายภาค
+        # - รหัสรายวิชาตามจริง (ใช้เพื่อดึงข้อมูล)
+        # - จำนวนที่นั่งที่เหลือ : เก็บใน course_seat
+        # - จำนวนที่นั่งที่เปิดรับทั้งหมด : เก็บใน course_seat
+    def scrap_courses_data(year = 2566, semester = 2, f_data: str = None, coursecode:str = "00*"):
         # set post data
         if not f_data:
             f_data = {
                 'facultyid': 'all',
                 'maxrow': '1000',
-                'Acadyear': self.year,
-                'semester': self.semester,
+                'Acadyear': year,
+                'semester': semester,
                 'coursecode': coursecode,
             }
-     
+
         # request web page with post method
-        response = requests.post('https://reg.msu.ac.th/registrar/class_info_1.asp', headers=self.headers, data=f_data)
+        response = requests.post('https://reg.msu.ac.th/registrar/class_info_1.asp', headers=headers, data=f_data)
 
         # check status
         if response.status_code != 200:
             print(f"Error: {response.status_code}")
             return
-        
-        # convert from windows-874 charset to utf-8
-        response.encoding = "windows-874"
-
-        content_windows874 = response.content
-        content_utf8 = content_windows874.decode("TIS-620").encode("utf-8")
 
         # BeautifulSoup
-        resp = BeautifulSoup(content_utf8, 'html.parser')
+        resp = BeautifulSoup(response.content, 'html5lib')
 
         # select table by CSS selector
-        soup = resp.select_one('body > div.contenttive > div:nth-child(1) > div.main > div > table:nth-child(6)')
+        soup = resp.select_one('body > div.contenttive > div:nth-child(1) > div.main > div > table')
+        
+        # Find all rows in the table, excluding the header and footer rows ([หน้าก่อน] [หน้าต่อไป])
+        rows = soup.select('table > tbody > tr')[3:-1]
+        # print(rows)
+        
 
-
-        # Find all rows in the table, excluding the header and footer rows
-        rows = soup.find_all('tr', class_='normalDetail')[1:-1]
-
+        uni_id = MSU.getUniversityID("MSU")
         # Iterate over each row and extract the required information
         for row in rows:
             cells = row.find_all('td')
-            code = cells[1].find('a').text.strip()
-            subject_data = cells[2].decode_contents().split("<br/>")
-            # TODO: มี font หลุดเข้ามาบางอัน
-            name = subject_data[0].split("<font")[0]
-            credit = cells[3].text.strip()
-            time = cells[4].text.strip()
-            sec = int(cells[5].text.strip())
-            remain = int(cells[8].text.strip())
-            receive = int(cells[6].text.strip())
+            seat_available = int(cells[6].text.strip())
 
+            if seat_available == 0:
+                continue
+
+            code = cells[1].find('a').text.strip()
+
+            # Parse the URL
+            parsed_url = urlparse(cells[1].find('a')['href'])
+            query_params = parse_qs(parsed_url.query)
+            suj_real_code = query_params.get('courseid', [])[0]
+
+            subject_data = cells[2].decode_contents().split("<br/>")
+            name_en = cells[2].contents[0].strip()
+            credit = cells[3].text.strip()
+            time_temp = BeautifulSoup(cells[4].decode_contents().replace("<br/>",";"), 'html5lib').text.split(';')
+            time_temp_res = []
+            for t in time_temp:
+                t_str = t.strip()
+                if t_str != '':
+                    time_temp_res.append(t_str)
+            time = ';'.join(time_temp_res)
+            sec = int(cells[5].text.strip())
+            seat_remain = int(cells[8].text.strip())
+            
+            # print(code, subject_data, name, credit, time, sec, seat_remain, seat_available)
+
+            # ======== complicated zone
+            # fetch all of master name
             lecturer_raw = subject_data[0]
             try:
                 lecturer_raw = subject_data[1]
@@ -451,86 +395,96 @@ class MSU:
             # Extract the text content of the <li> elements
             li_text = [li for font in font_elements for li in re.findall(r'<li>.*?</li>', font)]
             # Remove the <li> tags from the extracted text
-            li_text = [re.findall(r'<li>(.*?)<\/li>', nameLecture)[0].replace('<li>', ' / ') for nameLecture in li_text]
+            li_text = [re.findall(r'<li>(.*?)<\/li>', nameLecture)[0].replace('<li>', ';') for nameLecture in li_text]
             # Join the extracted text with a delimiter
             lecturer = ' / '.join(li_text)
 
+            # fetch note message if it has
             # Find the first <font> element
             first_font = re.search(r'<font[^>]*>(.*?)</font>', lecturer_raw)
 
             # Remove any nested <font> elements within the first <font> element
-            content = re.sub(r'<font[^>]*>.*?</font>', '', first_font.group(1))
+            note = re.sub(r'<font[^>]*>.*?</font>', '', first_font.group(1))
             # Find the content before the <font> tag
-            match = re.search(r'(.*?)<font', content)
+            match = re.search(r'(.*?)<font', note)
 
             # Extract the content
             if match:
-                content = match.group(1)
+                note = re.sub(r'[()&lt;&gt;]', '', match.group(1)).strip()
+
             else:
-                content = ""
+                note = None
+
+            # ======== exit complicated zone
 
             mid = None
             final = None
 
             try:
                 split_data = time.split("สอบปลายภาค")
-                mid = split_data[0].strip().split("สอบกลางภาค")[1].strip()
+                mid = split_data[0].strip().split("สอบกลางภาค")[1].replace(";","").strip()
             except:
                 pass
 
             try:
                 split_data = time.split("สอบปลายภาค")
-                final = split_data[1].strip()
+                final = split_data[1].replace(";","").strip()
             except:
                 pass
 
 
             try:
                 split_data = time.split("สอบกลางภาค")
-                time = split_data[0].strip()
+                time = split_data[0].strip().replace(";","")
             finally:
                 try:
                     split_data = time.split("สอบปลายภาค")
-                    time = split_data[0].strip()
+                    time = split_data[0].strip().replace(";","")
                 except:
                     pass
-
-            # Define the regular expression pattern
-            pattern = r'(\d+)([A-Za-z])'
-            # Find all matches in the string
-            matches = re.findall(pattern, time)
-            # Insert "&" between the number and alphabet character
-            time = re.sub(pattern, r'\1 & \2', time)
-
-            # set type
-            type = "GE-"+code[3:4]
-
-            # Create a dictionary for each course and append it to the data list
-            course = {
-                'type': type,
-                'code': code,
-                'name': name,
-                'note': content,
-                'credit': credit,
-                'time': time,
-                'sec': sec,
-                'remain':remain,
-                'receive': receive,
-                'mid': mid,
-                'final': final,
-                'lecturer': lecturer
-            }
-            self.dataALL.append(course)
+            
+            cur = con.cursor()
+            # insert - update subject data
+            # print(uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code)
+            query = """
+                    INSERT INTO course_detail (uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, exam_mid, exam_final, suj_real_code)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (uni_id, year, semester, sec, code)
+                    DO UPDATE SET
+                        note = %s,
+                        time = %s,
+                        lecturer = %s,
+                        exam_mid = %s,
+                        exam_final = %s
+                    RETURNING cr_id
+                    ;"""
+            cur.execute(query, (uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code, note, time, lecturer, mid, final))
+            cr_id = cur.fetchone()[0]
+            con.commit()
+            # insert - update seat data
+            # print(uni_id, year, semester, code, sec, seat_remain, seat_available)
+            query = """
+                    INSERT INTO course_seat (seat_remain, seat_available, cr_id)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (cr_id)
+                    DO UPDATE SET
+                        seat_remain = %s,
+                        seat_available = %s
+                    ;"""
+            cur.execute(query, (seat_remain, seat_available, cr_id, seat_remain, seat_available))
+            con.commit()
 
         # check next page
-        try:
-            if soup.find_all('tr', class_='normalDetail')[-1].select_one('td:nth-child(2) > a')['href']:
-                # set next page data
-                next_f_data = soup.find_all('tr', class_='normalDetail')[-1].select_one('td:nth-child(2) > a')['href'].split('class_info_1.asp?')[1]
-                print(next_f_data)
-                return self.scrap(next_f_data)
-        except Exception:
-            pass
+        # try:
+        #     if soup.find_all('tr', class_='normalDetail')[-1].select_one('td:nth-child(2) > a')['href']:
+        #         # set next page data
+        #         next_f_data = soup.find_all('tr', class_='normalDetail')[-1].select_one('td:nth-child(2) > a')['href'].split('class_info_1.asp?')[1]
+        #         print(next_f_data)
+        #         return MSU.scrap_ge_data(next_f_data)
+        # except Exception:
+        #     pass
+
+    # ด้านล่างยังไม่ได้ต่อ ไม่ต้องดูก็ได้เพราะคิดว่าไม่น่าใช้แล้วแหละ
     def split_ge_data(self):
         # Create a dictionary for each course and append it to the data list
         GE = {}

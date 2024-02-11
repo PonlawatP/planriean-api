@@ -30,7 +30,7 @@ query = query_schema + 'select * from courseset_detail;'
 # for row in rows:
 #     print(row)
 
-pg_i_main = 'm22'
+pg_i_main = 'main'
 
 while True:
     if pg_i_main == 'main':
@@ -38,7 +38,7 @@ while True:
         print("Choose Program Group")
         print("[1] Get Faculty list")
         print("[2] Courseset")
-        print("[3] ")
+        print("[3] Get Courses")
         print("[4] ")
         print("[5] ")
         pg_i_main = f'm{input()}'
@@ -56,6 +56,9 @@ while True:
     elif pg_i_main == 'm22':
         MSU.scrap_courseset_detail()
         pg_i_main = "m2"
+    elif pg_i_main == 'm3':
+        MSU.scrap_courses_data()
+        pg_i_main = "main"
     print('==================================')
 
 # === need to remove in future
