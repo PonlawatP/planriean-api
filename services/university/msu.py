@@ -41,7 +41,6 @@ class MSU:
     # init data
     ge_data_all = []
 
-    # # init
     def getUniversityID(name):
         cur = con.cursor()
         query = f'{query_schema} select uni_id from university_detail where uni_key = \'{name}\';'
@@ -51,7 +50,7 @@ class MSU:
         con.commit()
         return university_id
 
-    # Information process data
+    # Information process data into database
     def scrap_fac_data():
         # set post data
         f_data = {
@@ -286,96 +285,6 @@ class MSU:
 
         run('th')
         # run('en')
-        #     code = cells[1].find('a').text.strip()
-        #     subject_data = cells[2].decode_contents().split("<br/>")
-        #     # TODO: มี font หลุดเข้ามาบางอัน
-        #     name = subject_data[0].split("<font")[0]
-        #     credit = cells[3].text.strip()
-        #     time = cells[4].text.strip()
-        #     sec = int(cells[5].text.strip())
-        #     remain = int(cells[8].text.strip())
-        #     receive = int(cells[6].text.strip())
-
-        #     lecturer_raw = subject_data[0]
-        #     try:
-        #         lecturer_raw = subject_data[1]
-        #     except:
-        #         pass
-        #     # Extract the <font> elements within the outer <font> element
-        #     font_elements = re.findall(r'<font[^>]*>.*?</font>', lecturer_raw)
-        #     # Extract the text content of the <li> elements
-        #     li_text = [li for font in font_elements for li in re.findall(r'<li>.*?</li>', font)]
-        #     # Remove the <li> tags from the extracted text
-        #     li_text = [re.findall(r'<li>(.*?)<\/li>', nameLecture)[0].replace('<li>', ' / ') for nameLecture in li_text]
-        #     # Join the extracted text with a delimiter
-        #     lecturer = ' / '.join(li_text)
-
-        #     # Find the first <font> element
-        #     first_font = re.search(r'<font[^>]*>(.*?)</font>', lecturer_raw)
-
-        #     # Remove any nested <font> elements within the first <font> element
-        #     content = re.sub(r'<font[^>]*>.*?</font>', '', first_font.group(1))
-        #     # Find the content before the <font> tag
-        #     match = re.search(r'(.*?)<font', content)
-
-        #     # Extract the content
-        #     if match:
-        #         content = match.group(1)
-        #     else:
-        #         content = ""
-
-        #     mid = None
-        #     final = None
-
-        #     try:
-        #         split_data = time.split("สอบปลายภาค")
-        #         mid = split_data[0].strip().split("สอบกลางภาค")[1].strip()
-        #     except:
-        #         pass
-
-        #     try:
-        #         split_data = time.split("สอบปลายภาค")
-        #         final = split_data[1].strip()
-        #     except:
-        #         pass
-
-
-        #     try:
-        #         split_data = time.split("สอบกลางภาค")
-        #         time = split_data[0].strip()
-        #     finally:
-        #         try:
-        #             split_data = time.split("สอบปลายภาค")
-        #             time = split_data[0].strip()
-        #         except:
-        #             pass
-
-        #     # Define the regular expression pattern
-        #     pattern = r'(\d+)([A-Za-z])'
-        #     # Find all matches in the string
-        #     matches = re.findall(pattern, time)
-        #     # Insert "&" between the number and alphabet character
-        #     time = re.sub(pattern, r'\1 & \2', time)
-
-        #     # set type
-        #     type = "GE-"+code[3:4]
-
-        #     # Create a dictionary for each course and append it to the data list
-        #     course = {
-        #         'type': type,
-        #         'code': code,
-        #         'name': name,
-        #         'note': content,
-        #         'credit': credit,
-        #         'time': time,
-        #         'sec': sec,
-        #         'remain':remain,
-        #         'receive': receive,
-        #         'mid': mid,
-        #         'final': final,
-        #         'lecturer': lecturer
-        #     }
-        #     self.dataALL.append(course)
     def scrap_courseset_detail(facultyid = 12, courseset_id = 1126502):
         # set post data
         f_data = {
@@ -406,12 +315,12 @@ class MSU:
             uni_id = MSU.getUniversityID("MSU")
             fac_id = facultyid
             cr_id = courseset_id
-            cr_head_id = 'NULL'
+            cr_head_id = None
             for table in tables:
-                cr_head_id_ref = 'NULL'
-                cr_id_ref = 'NULL'
-                uni_id_ref = 'NULL'
-                fac_id_ref = 'NULL'
+                cr_head_id_ref = None
+                cr_id_ref = None
+                uni_id_ref = None
+                fac_id_ref = None
 
                 if table.select_one('table > tbody > tr.detail') == None:
                     # if it not an header
@@ -422,8 +331,20 @@ class MSU:
                         suj_name_en = re.sub(r"\s+", " ", s_sets[1].contents[0].text.strip())
                         suj_name_th = re.sub(r"\s+", " ", s_sets[1].contents[2].text.strip())
                         suj_credit = s_sets[2].text.strip()
+                        suj_real_id = s_sets[0].select_one('a')['href'].split('courseid=')[1]
                         
-                        # print('\t',suj_id, suj_name_en, suj_name_th, suj_credit)
+                        # print('\t',cr_id, fac_id, uni_id, cr_head_id, suj_id, suj_name_en, suj_name_th, suj_credit, suj_real_id)
+                        query = """
+                                INSERT INTO courseset_subject (cr_id, fac_id, uni_id, cr_head_id, suj_id, suj_name_en, suj_name_th, suj_credit, suj_real_id)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                ON CONFLICT (suj_real_id)
+                                DO UPDATE SET
+                                    suj_name_en = %s,
+                                    suj_name_th = %s,
+                                    suj_credit = %s
+                                ;"""
+                        cur.execute(query, (cr_id, fac_id, uni_id, cr_head_id, suj_id, suj_name_en, suj_name_th, suj_credit, suj_real_id, suj_name_en, suj_name_th, suj_credit))
+                        con.commit()
                 else:
                     # it's header (weird? nope)
                     t_sets = table.select('table > tbody > tr.detail > td')
@@ -433,7 +354,7 @@ class MSU:
                     cr_name_th = name_res.split(" ")[1]
                     cr_min_credit_ref = t_sets[1].text.split(" : ")[1].strip()
                     if cr_min_credit_ref == "-":
-                        cr_min_credit_ref = 'NULL'
+                        cr_min_credit_ref = None
 
                     # set reference header (if it have)
                     def find_references():
@@ -441,10 +362,8 @@ class MSU:
                         parts = cr_head_id.split('.')
                         for ii in range(len(parts)):
                             if len(parts) > ii+1:
-                                parent = parts[ii]  # The immediate parent value
-                                # if parent not in references:
+                                parent = parts[ii]
                                 references.append(parent)
-                                # references[parent].append(cr_head_id)
 
                         return '.'.join(references)
                     
@@ -456,114 +375,22 @@ class MSU:
                         uni_id_ref = uni_id
                         fac_id_ref = fac_id
 
-                    # print(cr_head_id, )
-                    print(cr_head_id, cr_name_th, cr_id_ref, fac_id_ref, uni_id_ref, cr_head_id_ref, cr_min_credit_ref)
-                    query = f"""
+                    # print(cr_head_id, cr_name_th, cr_id_ref, fac_id_ref, uni_id_ref, cr_head_id_ref, cr_min_credit_ref)
+                    query = """
                             INSERT INTO courseset_header (cr_id, fac_id, uni_id, cr_head_id, cr_name_en, cr_name_th, cr_id_ref, fac_id_ref, uni_id_ref, cr_head_id_ref, cr_min_credit_ref)
-                            VALUES ({cr_id}, {fac_id}, {uni_id}, \'{cr_head_id}\', NULL, \'{cr_name_th}\', {cr_id_ref}, {fac_id_ref}, {uni_id_ref}, \'{cr_head_id_ref}\', {cr_min_credit_ref})
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (cr_id, fac_id, uni_id, cr_head_id)
                             DO UPDATE SET
-                                cr_name_th = \'{cr_name_th}\',
-                                cr_name_en = NULL,
-                                cr_min_credit_ref = {cr_min_credit_ref}
+                                cr_name_th = %s,
+                                cr_name_en = %s,
+                                cr_min_credit_ref = %s
                             ;"""
-                    cur.execute(query)
+                    cur.execute(query, (cr_id, fac_id, uni_id, cr_head_id, None, cr_name_th, cr_id_ref, fac_id_ref, uni_id_ref, cr_head_id_ref, cr_min_credit_ref, cr_name_th, None, cr_min_credit_ref))
                     con.commit()
 
 
         run('th')
         # run('en')
-        #     code = cells[1].find('a').text.strip()
-        #     subject_data = cells[2].decode_contents().split("<br/>")
-        #     # TODO: มี font หลุดเข้ามาบางอัน
-        #     name = subject_data[0].split("<font")[0]
-        #     credit = cells[3].text.strip()
-        #     time = cells[4].text.strip()
-        #     sec = int(cells[5].text.strip())
-        #     remain = int(cells[8].text.strip())
-        #     receive = int(cells[6].text.strip())
-
-        #     lecturer_raw = subject_data[0]
-        #     try:
-        #         lecturer_raw = subject_data[1]
-        #     except:
-        #         pass
-        #     # Extract the <font> elements within the outer <font> element
-        #     font_elements = re.findall(r'<font[^>]*>.*?</font>', lecturer_raw)
-        #     # Extract the text content of the <li> elements
-        #     li_text = [li for font in font_elements for li in re.findall(r'<li>.*?</li>', font)]
-        #     # Remove the <li> tags from the extracted text
-        #     li_text = [re.findall(r'<li>(.*?)<\/li>', nameLecture)[0].replace('<li>', ' / ') for nameLecture in li_text]
-        #     # Join the extracted text with a delimiter
-        #     lecturer = ' / '.join(li_text)
-
-        #     # Find the first <font> element
-        #     first_font = re.search(r'<font[^>]*>(.*?)</font>', lecturer_raw)
-
-        #     # Remove any nested <font> elements within the first <font> element
-        #     content = re.sub(r'<font[^>]*>.*?</font>', '', first_font.group(1))
-        #     # Find the content before the <font> tag
-        #     match = re.search(r'(.*?)<font', content)
-
-        #     # Extract the content
-        #     if match:
-        #         content = match.group(1)
-        #     else:
-        #         content = ""
-
-        #     mid = None
-        #     final = None
-
-        #     try:
-        #         split_data = time.split("สอบปลายภาค")
-        #         mid = split_data[0].strip().split("สอบกลางภาค")[1].strip()
-        #     except:
-        #         pass
-
-        #     try:
-        #         split_data = time.split("สอบปลายภาค")
-        #         final = split_data[1].strip()
-        #     except:
-        #         pass
-
-
-        #     try:
-        #         split_data = time.split("สอบกลางภาค")
-        #         time = split_data[0].strip()
-        #     finally:
-        #         try:
-        #             split_data = time.split("สอบปลายภาค")
-        #             time = split_data[0].strip()
-        #         except:
-        #             pass
-
-        #     # Define the regular expression pattern
-        #     pattern = r'(\d+)([A-Za-z])'
-        #     # Find all matches in the string
-        #     matches = re.findall(pattern, time)
-        #     # Insert "&" between the number and alphabet character
-        #     time = re.sub(pattern, r'\1 & \2', time)
-
-        #     # set type
-        #     type = "GE-"+code[3:4]
-
-        #     # Create a dictionary for each course and append it to the data list
-        #     course = {
-        #         'type': type,
-        #         'code': code,
-        #         'name': name,
-        #         'note': content,
-        #         'credit': credit,
-        #         'time': time,
-        #         'sec': sec,
-        #         'remain':remain,
-        #         'receive': receive,
-        #         'mid': mid,
-        #         'final': final,
-        #         'lecturer': lecturer
-        #     }
-        #     self.dataALL.append(course)
-
 
     # GE process data
     def scrap_ge_data(self, f_data: str = None, coursecode:str = "004*"):
