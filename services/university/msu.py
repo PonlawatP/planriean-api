@@ -146,32 +146,32 @@ class MSU:
                     year = cells[4].text.strip()
                     lowset_grade = cells[5].text.strip()
                     cr_group_id = current_header_id
-                    query = f"""
+                    query = """
                             INSERT INTO courseset_detail (cr_group_id, uni_id, fac_id, cr_id, name_th, cr_key, credit, year, lowset_grade, og_link)
-                            VALUES ({cr_group_id}, {university_id}, {facultyid}, {cr_id}, '{name}', '{cr_key}', {credit}, {year}, {lowset_grade}, \'{og_link}\')
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (cr_id, fac_id, uni_id)
                             DO UPDATE SET
-                                name_th = '{name}',
-                                cr_key = '{cr_key}',
-                                credit = {credit},
-                                og_link = \'{og_link}\',
-                                year = {year},
-                                lowset_grade = {lowset_grade}
+                                name_th = %s,
+                                cr_key = %s,
+                                credit = %s,
+                                og_link = %s,
+                                year = %s,
+                                lowset_grade = %s
                             ;"""
-                    cur.execute(query)
+                    cur.execute(query, (cr_group_id, university_id, facultyid, cr_id, name, cr_key, credit, year, lowset_grade, og_link, name, cr_key, credit, og_link, year, lowset_grade))
                     con.commit()
                 else:
                     edu_level = cell.text.split(":")[1].strip()
 
-                    query = f'{query_schema} select cr_group_id from courseset_group where name_{lang} = \'{edu_level}\';'
-                    cur.execute(query)
+                    query = 'select cr_group_id from courseset_group where name_th = %s;'
+                    cur.execute(query, (edu_level))
                     rows = cur.fetchone()
                     con.commit()
                     # print(edu_level)
 
                     if rows == None:
-                        query = f'{query_schema} insert into courseset_group(name_{lang}) values (\'{edu_level.strip()}\') returning cr_group_id;'
-                        cur.execute(query)
+                        query = 'insert into courseset_group(name_th) values (%s) returning cr_group_id;'
+                        cur.execute(query, (edu_level.strip()))
                         gid = cur.fetchone()[0]
                         current_header_id = gid
                         # result.append({'id': gid, 'name_en': '', 'name_th': edu_level.strip()})
