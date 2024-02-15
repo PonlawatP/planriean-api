@@ -1,3 +1,4 @@
+require('dotenv').config()
 
 const express = require("express");
 const app = express();
@@ -5,108 +6,115 @@ const fs = require('fs');
 var pjson = require('./package.json');
 const port = process.env.PORT || 3031;
 const { home } = require("./routes");
-const dataALLPath = "./Group/MSU/dataALL.json";
-
-var dataALL = require(dataALLPath);
-var cors = require('cors')
+var cors = require('cors');
+const { getCourses } = require("./routes/course");
+const { authToken, authGetUser } = require("./routes/auth/login");
+const { loginMiddleware } = require("./middleware/loginMiddleware");
+const { requireJWTAuth } = require('./middleware/requireJWTAuth');
+const { registerUser } = require('./routes/auth/register');
+const { getPlanUser } = require('./routes/plan');
 app.use(express.json());
 app.use(cors())
-var cache_updated = "none"
 
 app.get("/", home);
-app.post('/datamajor', (req, res) => {
-   res.json(dataALL);
-});
-app.get('/Group/:id', (req, res) => {
-   const groupId = req.params.id;
-   const universal = "MSU";
-   try {
-      const data = require("./Group/" + universal + "/G" + groupId + ".json")
-      if (data.length > 0) {
-         res.json(data);
-      } else {
-         res.status(404).send("Group not found");
-      }
-   } catch {
-      res.status(404).send("Group not found");
-   }
-});
-app.post('/seccount/:type', (req, res) => {
-   const type = req.params.type;
-   try {
-      const filteredData = dataALL.filter(item => item.type === type);
-      const result = filteredData.map(item => ({
-         code: item.code,
-         name: item.name
-      }));
-      const mergedObjects = [];
-      result.map(data => {
-         if (!mergedObjects.map(mo => mo.code).includes(data.code)) {
-            mergedObjects.push({
-               ...data,
-               sec_count: filteredData.filter(df => df.code === data.code).length
-            })
-         }
-      })
-      res.json(mergedObjects);
-   } catch (error) {
-      res.status(404).send("Not found");
-   }
-});
-app.post('/updated', (req, res) => {
-   res.send(JSON.stringify(cache_updated));
-});
-app.post('/Filter', (req, res) => {
-   try {
-      const searchData = req.body;
-      const universal = "MSU";
-      fs.readFile('Group/' + universal + '/dataALL.json', 'utf8', (err, data) => {
-         if (err) {
-            console.error(err);
-            return res.status(404).send("Not found");
-         }
-         const dataALL = JSON.parse(data);
-         const searchResults = dataALL.filter(item => {
-            return (searchData.type.includes(item.type) || searchData.type.length == 0) &&
-               (searchData.code.includes(item.code) || searchData.code.length == 0) &&
-               (searchData.date.includes(item.time.substring(0, 2)) || searchData.date.length == 0) &&
-               (
-                  // if has more than 1 day it will check iterable
-                  item.time.split(' & ').filter(
-                     (fitem) => {
-                        // time filter had been ranged
-                        if(searchData.time.includes("-")){
-                           const fts = fitem.split("-");
-                           const ss = searchData.time.split("-");
-                           const sj_start_time = Number(fts[0].substring(2, 4))
-                           const sj_end_time = Number(fts[1].substring(0, 2))
-                           const ss_start_time = Number(ss[0])
-                           const ss_end_time = Number(ss[1])
+app.post("/auth/register", registerUser)
+app.post("/auth/login", loginMiddleware, authToken)
+app.get("/auth/user", requireJWTAuth, authGetUser)
+app.get("/plan", requireJWTAuth, getPlanUser)
+app.get("/course", getCourses)
+// app.post('/datamajor', (req, res) => {
+//    res.json(dataALL);
+// });
+// app.get('/Group/:id', (req, res) => {
+//    const groupId = req.params.id;
+//    const universal = "MSU";
+//    try {
+//       const data = require("./Group/" + universal + "/G" + groupId + ".json")
+//       if (data.length > 0) {
+//          res.json(data);
+//       } else {
+//          res.status(404).send("Group not found");
+//       }
+//    } catch {
+//       res.status(404).send("Group not found");
+//    }
+// });
+// app.post('/seccount/:type', (req, res) => {
+//    const type = req.params.type;
+//    try {
+//       const filteredData = dataALL.filter(item => item.type === type);
+//       const result = filteredData.map(item => ({
+//          code: item.code,
+//          name: item.name
+//       }));
+//       const mergedObjects = [];
+//       result.map(data => {
+//          if (!mergedObjects.map(mo => mo.code).includes(data.code)) {
+//             mergedObjects.push({
+//                ...data,
+//                sec_count: filteredData.filter(df => df.code === data.code).length
+//             })
+//          }
+//       })
+//       res.json(mergedObjects);
+//    } catch (error) {
+//       res.status(404).send("Not found");
+//    }
+// });
+// app.post('/updated', (req, res) => {
+//    res.send(JSON.stringify(cache_updated));
+// });
+// app.post('/Filter', (req, res) => {
+//    try {
+//       const searchData = req.body;
+//       const universal = "MSU";
+//       fs.readFile('Group/' + universal + '/dataALL.json', 'utf8', (err, data) => {
+//          if (err) {
+//             console.error(err);
+//             return res.status(404).send("Not found");
+//          }
+//          const dataALL = JSON.parse(data);
+//          const searchResults = dataALL.filter(item => {
+//             return (searchData.type.includes(item.type) || searchData.type.length == 0) &&
+//                (searchData.code.includes(item.code) || searchData.code.length == 0) &&
+//                (searchData.date.includes(item.time.substring(0, 2)) || searchData.date.length == 0) &&
+//                (
+//                   // if has more than 1 day it will check iterable
+//                   item.time.split(' & ').filter(
+//                      (fitem) => {
+//                         // time filter had been ranged
+//                         if(searchData.time.includes("-")){
+//                            const fts = fitem.split("-");
+//                            const ss = searchData.time.split("-");
+//                            const sj_start_time = Number(fts[0].substring(2, 4))
+//                            const sj_end_time = Number(fts[1].substring(0, 2))
+//                            const ss_start_time = Number(ss[0])
+//                            const ss_end_time = Number(ss[1])
 
-                           return sj_start_time >= ss_start_time && sj_end_time <= ss_end_time
-                        } else {
-                           return Number(fitem.substring(2, 4)) >= Number(searchData.time)
-                        }
-                     }
-                  ).length > 0 || searchData.time === "total"
-               )
-         });
+//                            return sj_start_time >= ss_start_time && sj_end_time <= ss_end_time
+//                         } else {
+//                            return Number(fitem.substring(2, 4)) >= Number(searchData.time)
+//                         }
+//                      }
+//                   ).length > 0 || searchData.time === "total"
+//                )
+//          });
 
-         // // Sort the search results by remaining most
-         // searchResults.sort((a, b) => {
-         //    return b.remaining - a.remaining;
-         // });
+//          // // Sort the search results by remaining most
+//          // searchResults.sort((a, b) => {
+//          //    return b.remaining - a.remaining;
+//          // });
 
-         // Sort the search results by subject time
-         searchResults.sort((a, b) => {
-            return Number(a.time.substring(2, 4)) - Number(b.time.substring(2, 4));
-         });
-         res.send(searchResults);
-      });
-   } catch {
-      res.status(404).send("Not found");
-   }
-});
+//          // Sort the search results by subject time
+//          searchResults.sort((a, b) => {
+//             return Number(a.time.substring(2, 4)) - Number(b.time.substring(2, 4));
+//          });
+//          res.send(searchResults);
+//       });
+//    } catch {
+//       res.status(404).send("Not found");
+//    }
+// });
 app.listen(port, () => {
    console.log("Planriean Subjects Service");
    console.log("Version: " + pjson.version);

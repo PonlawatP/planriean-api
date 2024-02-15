@@ -8,5 +8,5 @@ const home = (req, res) => {
 }
 
 module.exports = {
-    home:home
+    home
 }
