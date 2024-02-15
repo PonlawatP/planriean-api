@@ -24,3 +24,5 @@ webscraping.py
 
 node_modules*
 *package-lock*
+.env*
+.env
