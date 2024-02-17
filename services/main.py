@@ -5,6 +5,9 @@ from university.msu import MSU
 import psycopg2
 import configparser
 
+import datetime
+
+
 # specify user/password/where the database is
 config = configparser.ConfigParser()
 config.read('pg_config.ini')
@@ -57,7 +60,13 @@ while True:
         MSU.scrap_courseset_detail()
         pg_i_main = "m2"
     elif pg_i_main == 'm3':
-        MSU.scrap_courses_data()
+        today = datetime.date.today()
+
+        year = today.year+543-1
+        year = int(input(f'Enter the year (default: {year}): ').strip() or year)
+        semester = int(input(f'Enter the semester (default: 1): ').strip() or 1)
+        coursecode = input(f'Enter the coursecode (default: "00*"): ').strip() or '00*'
+        MSU.scrap_courses_data(year=year, semester=semester, coursecode=coursecode)
         pg_i_main = "main"
     print('==================================')
 

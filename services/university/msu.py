@@ -4,7 +4,8 @@
 
 import re
 import json
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+import warnings
 import requests
 import threading
 import psycopg2
@@ -34,6 +35,8 @@ query_schema = 'SET search_path to ' + schema_name + ';'
 
 # connect to the database
 con = psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host)
+
+warnings.filterwarnings('ignore', category=MarkupResemblesLocatorWarning)
 
 # Class นี้เขียนเพื่อจะใช้กับระบบทะเบียนของมหาวิทยาลัยมหาสารคาม หากต้องการแก้ไขเพื่อใช้กับมหาวิทยาลัยอื่นๆ อาจต้องพิจารณาตามความเหมาะสมของโครงเว็บในมหาวิทยาลัยนั้นๆ ด้วย
 class MSU:
@@ -435,14 +438,14 @@ class MSU:
 
             try:
                 split_data = time.split("สอบกลางภาค")
-                time = split_data[0].strip().replace(";","")
+                time = split_data[0].strip()[0:-1]
             finally:
                 try:
                     split_data = time.split("สอบปลายภาค")
-                    time = split_data[0].strip().replace(";","")
+                    time = split_data[0].strip()[0:-1]
                 except:
                     pass
-            
+
             cur = con.cursor()
             # insert - update subject data
             # print(uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code)
