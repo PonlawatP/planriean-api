@@ -2,12 +2,27 @@ const jwt = require("jwt-simple");
 const db = require("../../db");
 const { getUserFromToken } = require("../../utils/userutil");
 const { createDbDate } = require("../../utils/dateutil");
+
+async function isPlanOwner(req){
+    try {
+        const user = await getUserFromToken(req)
+        const {plan_id} = req.params
+        
+        const result = await db.query('SELECT * FROM plan_detail WHERE plan_id = $1 AND is_delete = false', [plan_id]);
+        if(result.rows.length > 0 || result.rows[0].plan_uid == user.uid){
+            return true
+        }
+    } catch (error) {
+    }
+    return false
+}
+
 async function getListPlanUser(req, res){
     try {
         const jwt_dc = jwt.decode(req.headers['authorization'], process.env.SECRET_JWT)
         
           const user = jwt_dc.sub
-          let result = await db.query('SELECT uid FROM user_detail WHERE username = $1', [user]);
+          let result = await db.query("SELECT uid FROM user_detail WHERE username = $1", [user]);
           if(result.rows.length == 0) {
             res.status(400).send('User Not Found');
             return;
@@ -15,7 +30,7 @@ async function getListPlanUser(req, res){
 
           const uid = result.rows[0].uid
 
-          result = await db.query('SELECT * FROM plan_detail WHERE user_uid = $1', [uid]);
+          result = await db.query('SELECT * FROM plan_detail WHERE user_uid = $1 AND is_delete = false', [uid]);
           res.send({
             username: user,
             plans: result.rows
@@ -89,9 +104,9 @@ async function updatePlanUser(req, res){
         const user = await getUserFromToken(req)
         const {plan_id} = req.params
         const {plan_name, cr_year, cr_seamseter, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status} = req.body
-        const result = await db.query(`UPDATE "plan_detail" SET "plan_name" = $1, "cr_year" = $2, "cr_seamseter" = $3, "uni_id" = $4, "fac_id" = $5, "major_id" = $6, "plan_color" = $7, "plan_img" = $8, "plan_dark" = $9, "is_folder" = $10, "ref_folder-plan_id" = $11, "status" = $12 WHERE "plan_id" = $13 RETURNING *;`, [plan_name, cr_year, cr_seamseter, user.uni_id, user.fac_id, user.major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status, plan_id]);
+        const result = await db.query(`UPDATE "plan_detail" SET "plan_name" = $1, "cr_year" = $2, "cr_seamseter" = $3, "uni_id" = $4, "fac_id" = $5, "major_id" = $6, "plan_color" = $7, "plan_img" = $8, "plan_dark" = $9, "is_folder" = $10, "ref_folder-plan_id" = $11, "status" = $12, "update_at" = to_timestamp($13) WHERE "plan_id" = $14 RETURNING *;`, [plan_name, cr_year, cr_seamseter, user.uni_id, user.fac_id, user.major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status, Date.now()/1000.0, plan_id]);
         res.json({success: true, result: result.rows[0]});
-    } catch (err) {
+    } catch (error) {
         res.status(400).json({success: false, error: error.code, msg: error.detail});
     }
 }
@@ -109,7 +124,7 @@ async function getPlanSubjectsUser(req, res){
         } else {
             res.status(404).json({success: false, error: 404, msg: "Plan Not Found"});
         }
-    } catch (err) {
+    } catch (error) {
         res.status(400).json({success: false, error: error.code, msg: error.detail});
     }
 }
@@ -138,6 +153,7 @@ async function updatePlanSubjectsUser(req, res){
             const values = subjects.flatMap(subject => [plan_id, subject.year, subject.semester, subject.code, subject.sec, subject.mute_alert, plan_detail.uni_id]);
             // ยัดข้อมูลลง database
             await db.query(insertQuery, values);
+            await db.query(`UPDATE "plan_detail" SET "update_at" = to_timestamp($1) WHERE "plan_id" = $2 RETURNING *;`, [Date.now()/1000.0, plan_id]);
             // return ข้อมูล
             const subjects_res = await getSubjectDataFromPlanSubject(plan_id, plan_detail.cr_year, plan_detail.cr_seamseter)
             res.json({success: true, result: subjects_res});
@@ -149,6 +165,19 @@ async function updatePlanSubjectsUser(req, res){
         res.status(400).json({success: false, error: err.code, msg: err.detail});
     }
 }
+async function deletePlanUser(req, res){
+    try {
+        const {plan_id} = req.params
+        if(await isPlanOwner(req)){
+            await db.query(`UPDATE "plan_detail" SET "is_delete" = true WHERE "plan_id" = $1;`, [plan_id]);
+            res.json({success: true});
+        } else {
+            res.status(403).json({success: false, error: 403, msg: "Plan not permitted to change"});
+        }
+    } catch (error) {
+        res.status(400).json({success: false, error: error.code, msg: error.detail});
+    }
+}
 
 module.exports = {
     getListPlanUser,
@@ -156,5 +185,6 @@ module.exports = {
     getPlanSubjectsUser,
     createPlanUser,
     updatePlanUser,
-    updatePlanSubjectsUser
+    updatePlanSubjectsUser,
+    deletePlanUser
 }

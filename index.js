@@ -12,7 +12,8 @@ const { authToken, authGetUser } = require("./routes/auth/login");
 const { loginMiddleware } = require("./middleware/loginMiddleware");
 const { requireJWTAuth } = require('./middleware/requireJWTAuth');
 const { registerUser } = require('./routes/auth/register');
-const { getListPlanUser, createPlanUser, getPlanUser, updatePlanUser, updatePlanSubjectsUser, getPlanSubjectsUser } = require('./routes/plan');
+const { getListPlanUser, createPlanUser, getPlanUser, updatePlanUser, updatePlanSubjectsUser, getPlanSubjectsUser, deletePlanUser } = require('./routes/plan');
+const { getCoursesetDetail, getCoursesetSubject } = require('./routes/courseset');
 app.use(express.json());
 app.use(cors())
 
@@ -24,10 +25,13 @@ app.get("/plan", requireJWTAuth, getListPlanUser)
 app.post("/plan/create", requireJWTAuth, createPlanUser)
 app.get("/plan/view/:plan_id", requireJWTAuth, getPlanUser)
 app.put("/plan/view/:plan_id", requireJWTAuth, updatePlanUser)
+app.delete("/plan/view/:plan_id", requireJWTAuth, deletePlanUser)
 app.get("/plan/view/:plan_id/subject", requireJWTAuth, getPlanSubjectsUser)
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser)
 app.get("/course", getCourses)
 app.post("/course/:year/:semester/:coursecode", getCoursesSpecific)
+app.get("/courseset/:id/detail", getCoursesetDetail)
+app.get("/courseset/:id/subject", getCoursesetSubject)
 // app.post('/datamajor', (req, res) => {
 //    res.json(dataALL);
 // });
