@@ -43,7 +43,8 @@ async function getListPlanUser(req, res){
 
           function getFolderModified(plan_elem){
             const fold = plan_folders.find(f=>f.plan_id == plan_elem.plan_id)
-            return fold == undefined ? plan_elem : fold.is_delete ? null : plan_elem
+            
+            return fold != undefined ? fold : plan_elem
           }
 
           plan_list = plan_list.map(p=>{
