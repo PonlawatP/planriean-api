@@ -6,7 +6,7 @@ async function authToken(req, res){
         sub: req.body.username,
         iat: new Date().getTime()//มาจากคำว่า issued at time (สร้างเมื่อ)
     };
-    res.send({token : jwt.encode(payload, process.env.SECRET_JWT)});
+    res.json({token : jwt.encode(payload, process.env.SECRET_JWT)});
 }
 
 async function authGetUser(req, res){

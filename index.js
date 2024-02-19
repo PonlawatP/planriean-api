@@ -14,13 +14,18 @@ const { requireJWTAuth } = require('./middleware/requireJWTAuth');
 const { registerUser } = require('./routes/auth/register');
 const { getListPlanUser, createPlanUser, getPlanUser, updatePlanUser, updatePlanSubjectsUser, getPlanSubjectsUser, deletePlanUser } = require('./routes/plan');
 const { getCoursesetDetail, getCoursesetSubject } = require('./routes/courseset');
+const { getUserSubjectHistory, updateUserSubjectHistory } = require('./routes/user/history');
 app.use(express.json());
 app.use(cors())
 
 app.get("/", home);
 app.post("/auth/register", registerUser)
 app.post("/auth/login", loginMiddleware, authToken)
-app.get("/auth/user", requireJWTAuth, authGetUser)
+
+app.get("/user", requireJWTAuth, authGetUser)
+app.get("/user/history", requireJWTAuth, getUserSubjectHistory)
+app.put("/user/history", requireJWTAuth, updateUserSubjectHistory)
+
 app.get("/plan", requireJWTAuth, getListPlanUser)
 app.post("/plan/create", requireJWTAuth, createPlanUser)
 app.get("/plan/view/:plan_id", requireJWTAuth, getPlanUser)
@@ -28,6 +33,7 @@ app.put("/plan/view/:plan_id", requireJWTAuth, updatePlanUser)
 app.delete("/plan/view/:plan_id", requireJWTAuth, deletePlanUser)
 app.get("/plan/view/:plan_id/subject", requireJWTAuth, getPlanSubjectsUser)
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser)
+
 app.get("/course", getCourses)
 app.post("/course/:year/:semester/:coursecode", getCoursesSpecific)
 app.get("/courseset/:id/detail", getCoursesetDetail)
@@ -72,7 +78,7 @@ app.get("/courseset/:id/subject", getCoursesetSubject)
 //    }
 // });
 // app.post('/updated', (req, res) => {
-//    res.send(JSON.stringify(cache_updated));
+//    res.json(JSON.stringify(cache_updated));
 // });
 // app.post('/Filter', (req, res) => {
 //    try {
@@ -119,7 +125,7 @@ app.get("/courseset/:id/subject", getCoursesetSubject)
 //          searchResults.sort((a, b) => {
 //             return Number(a.time.substring(2, 4)) - Number(b.time.substring(2, 4));
 //          });
-//          res.send(searchResults);
+//          res.json(searchResults);
 //       });
 //    } catch {
 //       res.status(404).send("Not found");

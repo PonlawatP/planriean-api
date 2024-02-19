@@ -30,10 +30,29 @@ async function getListPlanUser(req, res){
 
           const uid = result.rows[0].uid
 
-          result = await db.query('SELECT * FROM plan_detail WHERE user_uid = $1 AND is_delete = false', [uid]);
-          res.send({
+          result = await db.query('SELECT * FROM plan_detail WHERE user_uid = $1', [uid]);
+
+          let plan_list = result.rows
+          let plan_folders = plan_list.filter(f=>f.is_folder).map(m=>{return{...m, children: []}})
+
+          for (const folder of plan_folders) {
+            const plans_in_folder = plan_list.filter(f=>f['ref_folder-plan_id'] == folder.plan_id)
+            plan_list = plan_list.filter(f=>f['ref_folder-plan_id'] != folder.plan_id)
+            folder.children = plans_in_folder
+          }
+
+          function getFolderModified(plan_elem){
+            const fold = plan_folders.find(f=>f.plan_id == plan_elem.plan_id)
+            return fold == undefined ? plan_elem : fold.is_delete ? null : plan_elem
+          }
+
+          plan_list = plan_list.map(p=>{
+            return getFolderModified(p)
+          }).filter(f=>f != null && !f.is_delete)
+
+          res.json({
             username: user,
-            plans: result.rows
+            plans: plan_list,
           });
         } catch (err) {
           console.error(err);
@@ -63,7 +82,7 @@ async function getPlanUser(req, res){
           const {plan_id} = req.params
 
           const result = await db.query('SELECT * FROM plan_detail WHERE plan_id = $1', [plan_id]);
-          if (result.rows.length > 0){
+          if (result.rows.length > 0 && !result.rows[0].is_delete){
             const plan_detail = result.rows[0]
             const subjects_res = await getSubjectDataFromPlanSubject(plan_id, plan_detail.cr_year, plan_detail.cr_seamseter)
 
@@ -73,9 +92,9 @@ async function getPlanUser(req, res){
             }
 
             if(plan_detail.user_uid == user.uid){
-                res.send(plan_res);
+                res.json(plan_res);
             } else if(plan_detail.status == 'public') {
-                res.send(plan_res);
+                res.json(plan_res);
             } else {
                 res.status(403).json({success: false, error: 403, msg: "Plan Not Allow To Aceess"});
             }
@@ -120,7 +139,7 @@ async function getPlanSubjectsUser(req, res){
             const plan_detail = result.rows[0]
             const subjects_res = await getSubjectDataFromPlanSubject(plan_id, plan_detail.cr_year, plan_detail.cr_seamseter)
 
-            res.send({success: true, subjects: subjects_res})
+            res.json({success: true, subjects: subjects_res})
         } else {
             res.status(404).json({success: false, error: 404, msg: "Plan Not Found"});
         }
@@ -138,7 +157,7 @@ async function updatePlanSubjectsUser(req, res){
             const plan_detail = result.rows[0]
             // ไม่ให้ user id อื่นอัพเดตข้อมูลได้
             if(plan_detail.user_uid != user.uid){
-                return res.status(403).json({success: false, error: 403, msg: "Plan Forbidden"});;
+                return res.status(403).json({success: false, error: 403, msg: "Plan Forbidden"});
             }
 
             // reset ข้อมูลรายวิชาในแผนเรียนนั้นก่อนทำขั้นตอนต่อไป
@@ -169,7 +188,7 @@ async function deletePlanUser(req, res){
     try {
         const {plan_id} = req.params
         if(await isPlanOwner(req)){
-            await db.query(`UPDATE "plan_detail" SET "is_delete" = true WHERE "plan_id" = $1;`, [plan_id]);
+            await db.query(`UPDATE "plan_detail" SET "is_delete" = true WHERE "plan_id" = $1 OR "ref_folder-plan_id" = $2;`, [plan_id,plan_id]);
             res.json({success: true});
         } else {
             res.status(403).json({success: false, error: 403, msg: "Plan not permitted to change"});

@@ -4,7 +4,7 @@ const home = (req, res) => {
         version: 2,
         status: "running"
     }
-    res.send(data);
+    res.json(data);
 }
 
 module.exports = {
