@@ -36,7 +36,7 @@ async function getUserSubjectHistory(req, res){
         }
         res.json(result)
       } else {
-        throw err;
+        throw new Error('error!');;
       }
     } catch (err) {
       console.error(err);

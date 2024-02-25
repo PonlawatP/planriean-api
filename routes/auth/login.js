@@ -1,5 +1,7 @@
 const db = require("../../db");
 const jwt = require("jwt-simple");
+const { registerUser } = require("./register");
+const { getUserFromGoogle, getUserFromUsername } = require("../../utils/userutil");
 
 async function authToken(req, res){
     const payload = {
@@ -9,38 +11,67 @@ async function authToken(req, res){
     res.json({token : jwt.encode(payload, process.env.SECRET_JWT)});
 }
 
+async function authFromToken(req, res){
+    try {
+
+      const jwt_dc = jwt.decode(req.headers['authorization'], process.env.SECRET_JWT)
+      // console.log(jwt_dc)
+      
+        // const user = jwt_dc.sub
+        let result = await getUserFromGoogle(jwt_dc.email);
+
+        if(result == null){
+          const bd = {
+            body: {
+              username: null, 
+              password: null, 
+              uni_id: null, 
+              fac_id: null, 
+              major_id: null, 
+              std_id: null, 
+              cr_id: null, 
+              email: null, 
+              img: jwt_dc.picture, 
+              std_name: jwt_dc.name.split(" ")[0], 
+              std_surname: jwt_dc.name.split(" ")[1], 
+              phone: null, 
+              auth_gg_email: jwt_dc.email, 
+              auth_reg_username: null
+            }
+          }
+          const is_registered = await registerUser(bd, null)
+
+          if(is_registered){
+            result = await getUserFromGoogle(jwt_dc.email);
+          } else {
+            throw new Error("error")
+          }
+        }
+        
+        res.json(result);
+      } catch (err) {
+        console.error(err);
+        res.status(403).send('Invalid Token');
+      }
+}
+
 async function authGetUser(req, res){
     try {
 
       const jwt_dc = jwt.decode(req.headers['authorization'], process.env.SECRET_JWT)
+      let result = null;
       
-        const user = jwt_dc.sub
-        const result = await db.query('SELECT * FROM user_detail WHERE username = $1', [user]);
+        if(jwt_dc.email){
+          const email = jwt_dc.email
+          result = await getUserFromGoogle(email)
+        } else {
+          const user = jwt_dc.sub
+          result = await getUserFromUsername(user)
+        }
+      
 
-        if(result.rows.length > 0){
-          let user_nopass = {...result.rows[0], password:undefined}
-
-          const uni_res = await db.query('SELECT * FROM university_detail WHERE uni_id = $1', [user_nopass.uni_id]);
-          const fac_res = await db.query('SELECT * FROM university_faculty WHERE uni_id = $1 AND fac_id = $2', [user_nopass.uni_id, user_nopass.fac_id]);
-          const maj_res = await db.query('SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3', [user_nopass.uni_id, user_nopass.fac_id, user_nopass.major_id]);
-          const courseset_res = await db.query('SELECT * FROM courseset_detail WHERE cr_id = $1', [user_nopass.cr_id]);
-
-          const data = {
-            user: {
-              ...user_nopass,
-              uni_id: undefined,
-              fac_id: undefined,
-              major_id: undefined,
-              cr_id: undefined,
-              study_status: {
-                university: {...uni_res.rows[0]},
-                faculty: {...fac_res.rows[0]},
-                major: {...maj_res.rows[0]},
-                courseset: {...courseset_res.rows[0]},
-              }
-            }
-          }
-          res.json(data);
+        if(result != null){
+          res.json(result);
         } else {
           res.status(404).send('No User Found');
         }
@@ -52,5 +83,6 @@ async function authGetUser(req, res){
 
 module.exports = {
   authToken,
-  authGetUser
+  authGetUser,
+  authFromToken
 }

@@ -112,8 +112,8 @@ async function createPlanUser(req, res){
     try {
         const user = await getUserFromToken(req)
         const date = createDbDate()
-        const {plan_name, cr_year, cr_seamseter, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id} = req.body
-        const result = await db.query(`INSERT INTO "plan_detail" ("plan_name", "user_uid", "cr_year", "cr_seamseter", "uni_id", "fac_id", "major_id", "plan_color", "plan_img", "plan_dark", "is_folder", "ref_folder-plan_id", "create_at", "status") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, $14) RETURNING *;`, [plan_name, user.uid, cr_year, cr_seamseter, user.uni_id, user.fac_id, user.major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, date, "personal"]);
+        const {plan_name, cr_year, cr_seamseter, cr_id, std_year, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id} = req.body
+        const result = await db.query(`INSERT INTO "plan_detail" ("plan_name", "user_uid", "cr_year", "cr_seamseter", "cr_id", "std_year", "uni_id", "fac_id", "major_id", "plan_color", "plan_img", "plan_dark", "is_folder", "ref_folder-plan_id", "create_at", "status") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, $14) RETURNING *;`, [plan_name, user.uid, cr_year, cr_seamseter, cr_id, std_year, user.uni_id, user.fac_id, user.major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, date, "personal"]);
         res.json({success: true, result: result.rows[0]});
     } catch (err) {
         res.status(400).json({success: false, error: error.code, msg: error.detail});
@@ -123,8 +123,8 @@ async function updatePlanUser(req, res){
     try {
         const user = await getUserFromToken(req)
         const {plan_id} = req.params
-        const {plan_name, cr_year, cr_seamseter, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status} = req.body
-        const result = await db.query(`UPDATE "plan_detail" SET "plan_name" = $1, "cr_year" = $2, "cr_seamseter" = $3, "uni_id" = $4, "fac_id" = $5, "major_id" = $6, "plan_color" = $7, "plan_img" = $8, "plan_dark" = $9, "is_folder" = $10, "ref_folder-plan_id" = $11, "status" = $12, "update_at" = to_timestamp($13) WHERE "plan_id" = $14 RETURNING *;`, [plan_name, cr_year, cr_seamseter, user.uni_id, user.fac_id, user.major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status, Date.now()/1000.0, plan_id]);
+        const {plan_name, cr_year, cr_seamseter, cr_id, std_year, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status} = req.body
+        const result = await db.query(`UPDATE "plan_detail" SET "plan_name" = $1, "cr_year" = $2, "cr_seamseter" = $3, "uni_id" = $4, "fac_id" = $5, "major_id" = $6, "plan_color" = $7, "plan_img" = $8, "plan_dark" = $9, "is_folder" = $10, "ref_folder-plan_id" = $11, "status" = $12, "update_at" = to_timestamp($13), "cr_id" = $14, "std_year" = $15 WHERE "plan_id" = $16 RETURNING *;`, [plan_name, cr_year, cr_seamseter, user.uni_id, user.fac_id, user.major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, status, Date.now()/1000.0, cr_id, std_year, plan_id]);
         res.json({success: true, result: result.rows[0]});
     } catch (error) {
         res.status(400).json({success: false, error: error.code, msg: error.detail});

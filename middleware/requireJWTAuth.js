@@ -9,11 +9,14 @@ const jwtOptions = {
    secretOrKey: process.env.SECRET_JWT,
 }
 const jwtAuth = new JwtStrategy(jwtOptions, async (payload, done) => {
+   if(payload.email){
+      
+   }
    const result = await db.query(
-   "SELECT * FROM user_detail WHERE username = $1",
-      [payload.sub]
+   `SELECT * FROM user_detail WHERE ${payload.email ? "auth_gg_email" : "username"} = $1`,
+      [payload.email ? payload.email : payload.sub]
     );
-    if (result.rows.length > 0) {
+    if (result.rowCount > 0) {
       done(null, true);
     } else {
       done(null, false);
@@ -26,5 +29,5 @@ passport.use(jwtAuth);
 const requireJWTAuth = passport.authenticate("jwt",{session:false});
 
 module.exports = {
-   requireJWTAuth:requireJWTAuth
+   requireJWTAuth
 }
