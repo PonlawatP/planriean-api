@@ -167,7 +167,7 @@ async function createPlanUser(req, res) {
       ref_folder_plan_id,
     } = req.body;
     const uni_data = await getUniversityDetailWithNameFunc(university);
-    console.log(uni_data.university_data.uni_id);
+    // console.log(uni_data.university_data.uni_id);
     const pre_result = await db.query(
       `SELECT * FROM plan_detail WHERE user_uid = $1 AND is_delete = false AND plan_name = $2;`,
       [user.uid, plan_name]
@@ -281,6 +281,7 @@ async function updatePlanSubjectsUser(req, res) {
     const user = await getUserFromToken(req);
     const { plan_id } = req.params;
     const { subjects } = req.body;
+    console.log(subjects);
     const result = await db.query(
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]
@@ -296,36 +297,42 @@ async function updatePlanSubjectsUser(req, res) {
 
       // reset ข้อมูลรายวิชาในแผนเรียนนั้นก่อนทำขั้นตอนต่อไป
       await db.query(`DELETE FROM plan_subject WHERE plan_id = $1;`, [plan_id]);
-      // เอาข้อมูลบางส่วนที่ไม่ได้ส่งมากับ body ยัดใส่ก่อนสร้าง sql placeholder
-      const sjs = subjects.map((s) => {
-        return { plan_id, ...s, uni_id: plan_detail.uni_id };
-      });
-      const sql_placeholders = sjs
-        .map(
-          (_, i) =>
-            `(${Object.keys(sjs[0])
-              .map((_, j) => `$${i * Object.keys(sjs[0]).length + j + 1}`)
-              .join(",")})`
-        )
-        .join(",");
-      console.log(sql_placeholders);
-      const insertQuery = `
+
+      if (subjects.length > 0) {
+        // เอาข้อมูลบางส่วนที่ไม่ได้ส่งมากับ body ยัดใส่ก่อนสร้าง sql placeholder
+        const sjs = subjects.map((s) => {
+          return { plan_id, ...s, uni_id: plan_detail.uni_id };
+        });
+        const sql_placeholders = sjs
+          .map(
+            (_, i) =>
+              `(${Object.keys(sjs[0])
+                .map((_, j) => `$${i * Object.keys(sjs[0]).length + j + 1}`)
+                .join(",")})`
+          )
+          .join(",");
+        // console.log(sql_placeholders);
+        const insertQuery = `
                 INSERT INTO "plan_subject" (plan_id, year, seamster, code, sec, mute_alert, uni_id) 
                 VALUES ${sql_placeholders}
             ;`;
-      const values = subjects.flatMap((subject) => [
-        plan_id,
-        subject.year,
-        subject.semester,
-        subject.code,
-        subject.sec,
-        subject.mute_alert,
-        plan_detail.uni_id,
-      ]);
-      // ยัดข้อมูลลง database
-      await db.query(insertQuery, values);
+        const values = subjects.flatMap((subject) => [
+          plan_id,
+          subject.year,
+          subject.semester,
+          subject.code,
+          subject.sec,
+          subject.mute_alert,
+          plan_detail.uni_id,
+        ]);
+        // console.log(values);
+        // ยัดข้อมูลลง database
+        await db.query(insertQuery, values);
+      }
+
+      // update เวลาแก้ไขตาราง
       await db.query(
-        `UPDATE "plan_detail" SET "update_at" = to_timestamp($1) WHERE "plan_id" = $2 RETURNING *;`,
+        `UPDATE "plan_detail" SET "update_at" = to_timestamp($1) WHERE "plan_id" = $2 RETURNING *`,
         [Date.now() / 1000.0, plan_id]
       );
       // return ข้อมูล

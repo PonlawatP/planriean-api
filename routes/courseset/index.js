@@ -247,7 +247,7 @@ async function getSubjectGroups(req, res) {
               ],
       };
     });
-    console.log(crs);
+    // console.log(crs);
     // if (crs.rows.length > 0) {
     //   const crsr = crs.rows[0];
     //   const unv = await db.query(

@@ -12,39 +12,44 @@ async function getCourses(req, res) {
 
 async function getCoursesSpecific(req, res) {
   try {
-    const { year, semester, coursecode } = req.params;
-    const searchData = req.body;
+    const { year, semester } = req.params;
+    let searchData = req.body;
+
+    if (searchData.type.length == 0) {
+      searchData.type = ["00*"];
+    }
 
     console.log(searchData);
 
     // console.log(coursecode);
     let major_groups = "";
     let include_groups = [];
-    for (const cc of coursecode.split("|")) {
-      if (!cc.startsWith("_M-")) {
-        include_groups.push(cc.slice(0, -1));
-        continue;
-      }
+    // TODO: search subject from major book
+    // for (const cc of searchData.type) {
+    //   if (!cc.startsWith("_M-")) {
+    //     include_groups.push(cc.slice(0, -1));
+    //     continue;
+    //   }
 
-      const key = cc.substring(3);
-      // console.log(key);
-      const rr_result = await db.query(
-        `SELECT cr_id from courseset_detail WHERE uni_id = 1 AND cr_group_id = 34 AND upper(cr_key) = $1 ORDER BY cr_id DESC`,
-        [key]
-      );
-      const majorlist = rr_result.rows.map((r) => r.cr_id).join("|");
-      // console.log(rr_result.rows.map((r) => r.cr_id).join("|"));
-      const rr2_result = await db.query(
-        `SELECT * from courseset_subject WHERE CAST(cr_id AS TEXT) SIMILAR TO $1`,
-        [majorlist]
-      );
-      // console.log(rr2_result.rows.map((r) => r.suj_id).join("|"));
-      major_groups = rr2_result.rows
-        .map((r) => r.suj_id)
-        .filter((r) => !r.startsWith("00"))
-        .join("|");
-      // SELECT * from courseset_detail WHERE uni_id = 1 AND cr_group_id = 34 AND upper(cr_key) = 'IS' ORDER BY cr_key, cr_id DESC
-    }
+    //   const key = cc.substring(3);
+    //   // console.log(key);
+    //   const rr_result = await db.query(
+    //     `SELECT cr_id from courseset_detail WHERE uni_id = 1 AND cr_group_id = 34 AND upper(cr_key) = $1 ORDER BY cr_id DESC`,
+    //     [key]
+    //   );
+    //   const majorlist = rr_result.rows.map((r) => r.cr_id).join("|");
+    //   // console.log(rr_result.rows.map((r) => r.cr_id).join("|"));
+    //   const rr2_result = await db.query(
+    //     `SELECT * from courseset_subject WHERE CAST(cr_id AS TEXT) SIMILAR TO $1`,
+    //     [majorlist]
+    //   );
+    //   // console.log(rr2_result.rows.map((r) => r.suj_id).join("|"));
+    //   major_groups = rr2_result.rows
+    //     .map((r) => r.suj_id)
+    //     .filter((r) => !r.startsWith("00"))
+    //     .join("|");
+    //   // SELECT * from courseset_detail WHERE uni_id = 1 AND cr_group_id = 34 AND upper(cr_key) = 'IS' ORDER BY cr_key, cr_id DESC
+    // }
     // for (const cc of include_groups) {
     //   major_groups = major_groups.filter((r) => !r.startsWith("00"))
     // }
@@ -58,19 +63,25 @@ async function getCoursesSpecific(req, res) {
         year,
         semester,
         (major_groups == "" ? "" : major_groups + "|") +
-          coursecode.replaceAll("*", "%"),
+          (searchData.code.length > 0
+            ? searchData.code.join("|")
+            : searchData.type.join("|").replaceAll("*", "%")),
       ]
     );
     const data = result.rows;
 
-    // console.log(searchData.master);
+    // console.log(
+    //   searchData.code.length > 0
+    //     ? searchData.code.join("|")
+    //     : searchData.type.join("|").replaceAll("*", "%")
+    // );
 
     // TODO: convert into new code
     const searchResults = data
       .filter((item) => {
         return (
-          (searchData.code.includes(item.code) ||
-            searchData.code.length == 0) &&
+          // (searchData.code.includes(item.code) ||
+          //   searchData.code.length == 0) &&
           (searchData.date.includes(item.time.substring(0, 2)) ||
             searchData.date.length == 0) &&
           (searchData.master.length == 0 ||
@@ -100,7 +111,7 @@ async function getCoursesSpecific(req, res) {
         );
       })
       .map((r) => {
-        console.log(r);
+        // console.log(r);
         return { ...r, "cr_id(1)": undefined };
       });
 

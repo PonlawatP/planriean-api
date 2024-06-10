@@ -75,9 +75,9 @@ app.get(
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser);
 
 app.get("/course", getCourses);
+app.post("/course/:year/:semester", getCoursesSpecific);
 app.get("/course/:year/:semester/group", getSubjectGroups);
 app.get("/course/:year/:semester/lecturer", getLectureGroups);
-app.post("/course/:year/:semester/:coursecode", getCoursesSpecific);
 app.get("/courseset/:id/detail", getCoursesetDetail);
 app.get("/courseset/:id/subject", getCoursesetSubject);
 
