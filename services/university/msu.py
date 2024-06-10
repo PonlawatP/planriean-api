@@ -78,10 +78,13 @@ class MSU:
 
         # select table by CSS selector
         soup = resp.select('body > div.contenttive > div > div.main > div > div > form > table > tbody > tr > td:nth-child(2) > font > select > option')
+        res = []
         for row in soup:
             value = row['value']
             name = row.text.split(" : ")[1].strip()
             print(value, name)
+            res.append(value)
+        return res
 
     # scrap_courseset_list
     # ดึงข้อมูลรายการหลักสูตรของคณะมาเก็บไว้ก่อน
@@ -104,6 +107,7 @@ class MSU:
         }
         
         def run(lang = 'th'):
+            res = []
             # request web page with post method
             # ส่งค่าจาก f_data ไปเพื่อรับค่าจาก web กลับมา
             response = requests.post('https://reg.msu.ac.th/registrar/program_info.asp', headers=headers, data=f_data)
@@ -144,11 +148,17 @@ class MSU:
                     name = cells[1].text.strip()
                     cr_key = cells[2].text.strip()
                     credit = cells[3].text.strip()
+
                     if credit == "":
-                        credit = 0
+                        continue
+
                     year = cells[4].text.strip()
                     lowset_grade = cells[5].text.strip()
                     cr_group_id = current_header_id
+
+                    if year == "":
+                        continue
+
                     query = """
                             INSERT INTO courseset_detail (cr_group_id, uni_id, fac_id, cr_id, name_th, cr_key, credit, year, lowset_grade, og_link)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -163,18 +173,20 @@ class MSU:
                             ;"""
                     cur.execute(query, (cr_group_id, university_id, facultyid, cr_id, name, cr_key, credit, year, lowset_grade, og_link, name, cr_key, credit, og_link, year, lowset_grade))
                     con.commit()
+                    res.append(cr_id)
                 else:
                     edu_level = cell.text.split(":")[1].strip()
 
-                    query = 'select cr_group_id from courseset_group where name_th = %s;'
-                    cur.execute(query, (edu_level))
+                    query = 'select cr_group_id from courseset_group where name_th = %s and uni_id = %s;'
+                    cur.execute(query, (edu_level, university_id))
                     rows = cur.fetchone()
                     con.commit()
                     # print(edu_level)
 
                     if rows == None:
-                        query = 'insert into courseset_group(name_th) values (%s) returning cr_group_id;'
-                        cur.execute(query, (edu_level.strip()))
+                        query = 'insert into courseset_group(name_th, uni_id) values (%s, %s) returning cr_group_id;'
+                        print(edu_level)
+                        cur.execute(query, (edu_level, university_id))
                         gid = cur.fetchone()[0]
                         current_header_id = gid
                         # result.append({'id': gid, 'name_en': '', 'name_th': edu_level.strip()})
@@ -182,11 +194,11 @@ class MSU:
                     else:
                         # result.append({'id': rows[0], 'name_en': rows[1], 'name_th': rows[2]})
                         current_header_id = rows[0]
-
+            return res
             # print(result)
 
 
-        run('th')
+        return run('th')
         # run('en')
 
     # scrap_courseset_detail
@@ -266,6 +278,8 @@ class MSU:
                     name_res = re.sub(r"\s+", " ", t_sets[0].text.strip())
 
                     cr_head_id = name_res.split(" ")[0]
+                    if cr_head_id.endswith('.'):
+                        cr_head_id = cr_head_id[:-1]
                     cr_name_th = ' '.join(name_res.split(" ")[1:])
                     cr_min_credit_ref = t_sets[1].text.split(" : ")[1].strip()
                     if cr_min_credit_ref == "-":
@@ -274,6 +288,7 @@ class MSU:
                     # set reference header (if it have)
                     def find_references():
                         references = []
+
                         parts = cr_head_id.split('.')
                         for ii in range(len(parts)):
                             if len(parts) > ii+1:
@@ -289,6 +304,8 @@ class MSU:
                         cr_id_ref = cr_id
                         uni_id_ref = uni_id
                         fac_id_ref = fac_id
+
+                    # print(f'head: {cr_head_id} | ref: {cr_head_id_ref}')
 
                     # print(cr_head_id, cr_name_th, cr_id_ref, fac_id_ref, uni_id_ref, cr_head_id_ref, cr_min_credit_ref)
                     query = """
@@ -344,6 +361,7 @@ class MSU:
             print(f"Error: {response.status_code}")
             return
 
+        # print(response.content)
         # BeautifulSoup
         resp = BeautifulSoup(response.content, 'html5lib')
 
@@ -357,12 +375,13 @@ class MSU:
 
         uni_id = MSU.getUniversityID("MSU")
         # Iterate over each row and extract the required information
+        # print(rows)
         for row in rows:
             cells = row.find_all('td')
             seat_available = int(cells[6].text.strip())
 
-            if seat_available == 0:
-                continue
+            # if seat_available == 0:
+            #     continue
 
             code = cells[1].find('a').text.strip()
 
