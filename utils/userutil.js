@@ -28,7 +28,7 @@ async function getUserFromToken(req, show_passwd = false) {
 
     let result = await db.query(
       `SELECT * FROM user_detail WHERE ${
-        jwt_dc.email ? "auth_gg_email" : "username"
+        jwt_dc.email ? "email" : "username"
       } = $1`,
       [jwt_dc.email ? jwt_dc.email : jwt_dc.sub]
     );
@@ -100,7 +100,7 @@ async function getUserRole(user_data) {
 
 async function getUserFromUsername(user) {
   const result = await db.query(
-    "SELECT * FROM user_detail WHERE username = $1",
+    "SELECT * FROM user_detail WHERE lower(username) = lower($1)",
     [user]
   );
   if (result.rows.length > 0) {
@@ -144,10 +144,9 @@ async function getUserFromUsername(user) {
   }
 }
 async function getUserFromGoogle(email) {
-  const result = await db.query(
-    "SELECT * FROM user_detail WHERE auth_gg_email = $1",
-    [email]
-  );
+  const result = await db.query("SELECT * FROM user_detail WHERE email = $1", [
+    email,
+  ]);
   if (result.rows.length > 0) {
     let user_nopass = { ...result.rows[0], password: undefined };
 

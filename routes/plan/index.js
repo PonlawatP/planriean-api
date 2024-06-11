@@ -281,7 +281,7 @@ async function updatePlanSubjectsUser(req, res) {
     const user = await getUserFromToken(req);
     const { plan_id } = req.params;
     const { subjects } = req.body;
-    console.log(subjects);
+    // console.log(subjects);
     const result = await db.query(
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]

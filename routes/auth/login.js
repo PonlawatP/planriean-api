@@ -22,8 +22,13 @@ async function authFromToken(req, res) {
     );
     // console.log(jwt_dc)
 
-    console.log(jwt_dc);
+    // console.log(jwt_dc);
 
+    if (jwt_dc.sub) {
+      result = await getUserFromUsername(jwt_dc.email);
+      res.json(result);
+      return;
+    }
     // const user = jwt_dc.sub
     let result = await getUserFromGoogle(jwt_dc.email);
 
@@ -42,7 +47,7 @@ async function authFromToken(req, res) {
           std_name: jwt_dc.name.split(" ")[0],
           std_surname: jwt_dc.name.split(" ")[1],
           phone: null,
-          auth_gg_email: jwt_dc.email,
+          email: jwt_dc.email,
           auth_reg_username: null,
         },
       };
@@ -69,6 +74,7 @@ async function authGetUser(req, res) {
       process.env.SECRET_JWT
     );
     let result = null;
+    console.log(jwt_dc);
 
     if (jwt_dc.email) {
       const email = jwt_dc.email;

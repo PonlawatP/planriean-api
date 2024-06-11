@@ -7,8 +7,6 @@ const {
 
 async function registerUser(req, res) {
   try {
-    // console.log(req.body);
-    // return;
     const today = new Date();
     const yyyy = today.getFullYear();
     let mm = today.getMonth() + 1; // month is zero-based
@@ -26,17 +24,16 @@ async function registerUser(req, res) {
       major_id,
       std_id,
       cr_id,
-      email,
       image,
       std_name,
       std_surname,
       phone,
-      auth_gg_email,
+      email,
       auth_reg_username,
       std_start_year,
     } = req.body;
     await db.query(
-      `INSERT INTO "public"."user_detail" ("username", "password", "uni_id", "fac_id", "major_id", "std_id", "cr_id", "email", "image", "std_name", "std_surname", "phone", "auth_gg_email", "auth_reg_username", "create_at", "std_start_year") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`,
+      `INSERT INTO "public"."user_detail" ("username", "password", "uni_id", "fac_id", "major_id", "std_id", "cr_id", "image", "std_name", "std_surname", "phone", "email", "auth_reg_username", "create_at", "std_start_year") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);`,
       [
         username,
         password,
@@ -45,12 +42,11 @@ async function registerUser(req, res) {
         major_id,
         std_id,
         cr_id,
-        email,
         image,
         std_name,
         std_surname,
         phone,
-        auth_gg_email,
+        email,
         auth_reg_username,
         formatted,
         std_start_year,
@@ -79,7 +75,7 @@ async function updateFSUser(req, res) {
       req.body;
     await db.query(
       `UPDATE "public"."user_detail" SET "uni_id" = $1, fac_id = $2, "major_id" = $3, "std_id" = $4, "cr_id" = $5, "std_start_year" = $6 WHERE ${
-        jwt_dc.email ? "auth_gg_email" : "username"
+        jwt_dc.email ? "email" : "username"
       } = $7;`,
       [
         uni_id,

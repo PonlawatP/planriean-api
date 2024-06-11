@@ -8,7 +8,7 @@ const loginMiddleware = async (req, res, next) => {
     const user = req.body.username;
     const password = req.body.password;
     const result = await db.query(
-      "SELECT * FROM user_detail WHERE username = $1",
+      "SELECT * FROM user_detail WHERE lower(username) = lower($1)",
       [user]
     );
     if (result.rows.length > 0) {
@@ -20,11 +20,13 @@ const loginMiddleware = async (req, res, next) => {
         res.status(401).send("Invalid Username or password");
       }
     } else {
-      res.status(404).send("No User Found");
+      // 404 - No User Found
+      res.status(401).send("Invalid Username or password");
     }
   } catch (err) {
     console.error(err);
-    res.status(403).send("Invalid Input");
+    // 403 - Invalid Input
+    res.status(401).send("Invalid Username or password");
   }
 };
 module.exports = {
