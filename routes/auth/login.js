@@ -74,7 +74,7 @@ async function authGetUser(req, res) {
       process.env.SECRET_JWT
     );
     let result = null;
-    console.log(jwt_dc);
+    // console.log(jwt_dc);
 
     if (jwt_dc.email) {
       const email = jwt_dc.email;

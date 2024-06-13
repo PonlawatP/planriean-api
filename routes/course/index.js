@@ -19,7 +19,7 @@ async function getCoursesSpecific(req, res) {
       searchData.type = ["00*"];
     }
 
-    console.log(searchData);
+    // console.log(searchData);
 
     // console.log(coursecode);
     let major_groups = "";
@@ -115,7 +115,7 @@ async function getCoursesSpecific(req, res) {
         return { ...r, "cr_id(1)": undefined };
       });
 
-    res.json(searchResults);
+    res.json({ updated: "test", subjects: searchResults });
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal Server Error");

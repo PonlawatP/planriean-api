@@ -70,7 +70,7 @@ async function updateFSUser(req, res) {
       req.headers["authorization"],
       process.env.SECRET_JWT
     );
-    console.log(jwt_dc);
+    // console.log(jwt_dc);
     const { uni_id, fac_id, major_id, std_id, cr_id, std_start_year } =
       req.body;
     await db.query(

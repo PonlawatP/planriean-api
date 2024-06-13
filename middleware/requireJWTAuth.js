@@ -9,7 +9,7 @@ const jwtOptions = {
   secretOrKey: process.env.SECRET_JWT,
 };
 const jwtAuth = new JwtStrategy(jwtOptions, async (payload, done) => {
-  console.log(payload);
+  // console.log(payload);
   const result = await db.query(
     `SELECT * FROM user_detail WHERE LOWER(${
       payload.email ? "email" : "username"
