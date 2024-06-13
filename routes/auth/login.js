@@ -36,7 +36,7 @@ async function authFromToken(req, res) {
       const bd = {
         body: {
           username: null,
-          password: null,
+          password: "null",
           uni_id: null,
           fac_id: null,
           major_id: null,

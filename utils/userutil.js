@@ -1,5 +1,6 @@
 const jwt = require("jwt-simple");
 const db = require("../db");
+const bcrypt = require("bcryptjs");
 async function getUser(username, show_passwd = false) {
   try {
     let result = await db.query(
@@ -204,7 +205,7 @@ async function getUserFromGoogle(email) {
   }
 }
 
-const encryptPassword = async (password) => {
+const encryptPassword = async (password = "") => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
   return hashedPassword;
