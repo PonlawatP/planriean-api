@@ -5,6 +5,7 @@ const {
   getUserFromUsername,
   checkUsername,
   checkEmail,
+  encryptPassword,
 } = require("../../utils/userutil");
 
 async function registerUser(req, res) {
@@ -34,11 +35,12 @@ async function registerUser(req, res) {
       auth_reg_username,
       std_start_year,
     } = req.body;
+    const hashedPass = await encryptPassword(password);
     await db.query(
       `INSERT INTO "public"."user_detail" ("username", "password", "uni_id", "fac_id", "major_id", "std_id", "cr_id", "image", "std_name", "std_surname", "phone", "email", "auth_reg_username", "create_at", "std_start_year") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);`,
       [
         username,
-        password,
+        hashedPass,
         uni_id,
         fac_id,
         major_id,

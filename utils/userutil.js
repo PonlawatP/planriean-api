@@ -204,6 +204,12 @@ async function getUserFromGoogle(email) {
   }
 }
 
+const encryptPassword = async (password) => {
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+  return hashedPassword;
+};
+
 module.exports = {
   getUser,
   getUserFromToken,
@@ -213,4 +219,5 @@ module.exports = {
   getUserFromUsername,
   checkUsername,
   checkEmail,
+  encryptPassword,
 };
