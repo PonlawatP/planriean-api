@@ -3,8 +3,8 @@ const db = require("../db");
 async function getUser(username, show_passwd = false) {
   try {
     let result = await db.query(
-      "SELECT * FROM user_detail WHERE username = $1",
-      [username]
+      "SELECT * FROM user_detail WHERE lower(username) = lower($1) OR lower(email) = lower($2)",
+      [username, username]
     );
 
     if (result.rows.length == 0) {
@@ -28,9 +28,9 @@ async function getUserFromToken(req, show_passwd = false) {
 
     let result = await db.query(
       `SELECT * FROM user_detail WHERE ${
-        jwt_dc.email ? "email" : "username"
-      } = $1`,
-      [jwt_dc.email ? jwt_dc.email : jwt_dc.sub]
+        jwt_dc.email ? "email" : "lower(username)"
+      } = lower($1)${!jwt_dc.email ? " OR lower(email) = lower($2)" : ""}`,
+      [...(jwt_dc.email ? [jwt_dc.email] : [jwt_dc.sub, jwt_dc.sub])]
     );
 
     if (result.rows.length == 0) {
@@ -98,10 +98,26 @@ async function getUserRole(user_data) {
   }
 }
 
-async function getUserFromUsername(user) {
+async function checkUsername(user) {
   const result = await db.query(
     "SELECT * FROM user_detail WHERE lower(username) = lower($1)",
     [user]
+  );
+  return result.rowCount == 0;
+}
+
+async function checkEmail(user) {
+  const result = await db.query(
+    "SELECT * FROM user_detail WHERE lower(email) = lower($1)",
+    [user]
+  );
+  return result.rowCount == 0;
+}
+
+async function getUserFromUsername(user) {
+  const result = await db.query(
+    "SELECT * FROM user_detail WHERE lower(username) = lower($1) OR lower(email) = lower($2)",
+    [user, user]
   );
   if (result.rows.length > 0) {
     let user_nopass = { ...result.rows[0], password: undefined };
@@ -195,4 +211,6 @@ module.exports = {
   getUserRole,
   getUserFromGoogle,
   getUserFromUsername,
+  checkUsername,
+  checkEmail,
 };

@@ -13,8 +13,8 @@ const jwtAuth = new JwtStrategy(jwtOptions, async (payload, done) => {
   const result = await db.query(
     `SELECT * FROM user_detail WHERE LOWER(${
       payload.email ? "email" : "username"
-    }) = LOWER($1)`,
-    [payload.email ? payload.email : payload.sub]
+    }) = LOWER($1)${!payload.email ? " OR LOWER(email) = LOWER($2)" : ""}`,
+    [...(payload.email ? [payload.email] : [payload.sub, payload.sub])]
   );
   if (result.rowCount > 0) {
     done(null, true);

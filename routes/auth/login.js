@@ -25,7 +25,7 @@ async function authFromToken(req, res) {
     // console.log(jwt_dc);
 
     if (jwt_dc.sub) {
-      result = await getUserFromUsername(jwt_dc.email);
+      result = await getUserFromUsername(jwt_dc.sub);
       res.json(result);
       return;
     }

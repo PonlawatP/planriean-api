@@ -3,6 +3,8 @@ const jwt = require("jwt-simple");
 const {
   getUserFromGoogle,
   getUserFromUsername,
+  checkUsername,
+  checkEmail,
 } = require("../../utils/userutil");
 
 async function registerUser(req, res) {
@@ -15,7 +17,7 @@ async function registerUser(req, res) {
     if (dd < 10) dd = "0" + dd;
     if (mm < 10) mm = "0" + mm;
 
-    const formatted = yyyy + "-" + mm + "-" + dd;
+    const formatted = `${yyyy}-${mm}-${dd}`;
     const {
       username,
       password,
@@ -88,21 +90,54 @@ async function updateFSUser(req, res) {
       ]
     );
 
-    if (jwt_dc.email) {
-      const result = await getUserFromGoogle(jwt_dc.email);
-      res.json(result);
-    } else {
-      const result = await getUserFromUsername(jwt_dc.user.username);
-      res.json(result);
-    }
+    const result = jwt_dc.email
+      ? await getUserFromGoogle(jwt_dc.email)
+      : await getUserFromUsername(jwt_dc.user.username);
+    res.json(result);
     return true;
   } catch (error) {
-    console.log(error);
-    res != null
-      ? res
-          .status(400)
-          .json({ success: false, error: error.code, msg: error.detail })
-      : () => {};
+    console.error(error);
+    res
+      .status(400)
+      .json({ success: false, error: error.code, msg: error.detail });
+    return false;
+  }
+}
+async function checkEmailUser(req, res) {
+  try {
+    const { email } = req.body;
+    if (email.trim() == "") {
+      res.json(false);
+      return false;
+    }
+    const e = await checkEmail(email.trim());
+
+    res.json(e);
+    return e;
+  } catch (error) {
+    console.error(error);
+    res
+      .status(400)
+      .json({ success: false, error: error.code, msg: error.detail });
+    return false;
+  }
+}
+async function checkUsernameUser(req, res) {
+  try {
+    const { username } = req.body;
+    if (username.trim() == "") {
+      res.json(false);
+      return false;
+    }
+    const e = await checkUsername(username);
+
+    res.json(e);
+    return e;
+  } catch (error) {
+    console.error(error);
+    res
+      .status(400)
+      .json({ success: false, error: error.code, msg: error.detail });
     return false;
   }
 }
@@ -110,4 +145,6 @@ async function updateFSUser(req, res) {
 module.exports = {
   registerUser,
   updateFSUser,
+  checkEmailUser,
+  checkUsernameUser,
 };

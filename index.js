@@ -20,6 +20,8 @@ const {
   registerUser,
   updateUser,
   updateFSUser,
+  checkEmailUser,
+  checkUsernameUser,
 } = require("./routes/auth/register");
 const {
   getListPlanUser,
@@ -53,6 +55,8 @@ app.use(bodyParser.urlencoded({ extended: true, limit: "6mb" }));
 
 app.get("/", home);
 app.post("/auth/register", registerUser);
+app.post("/auth/register/email", checkEmailUser);
+app.post("/auth/register/username", checkUsernameUser);
 app.post("/auth/login", loginMiddleware, authToken);
 app.post("/auth/token", authFromToken);
 
