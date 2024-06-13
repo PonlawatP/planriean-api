@@ -343,6 +343,7 @@ class MSU:
         # - จำนวนที่นั่งที่เหลือ : เก็บใน course_seat
         # - จำนวนที่นั่งที่เปิดรับทั้งหมด : เก็บใน course_seat
     def scrap_courses_data(year = 2566, semester = 2, f_data: str = None, coursecode:str = "00*"):
+        print(f'scraping {coursecode}')
         # set post data
         if not f_data:
             f_data = {
@@ -495,6 +496,7 @@ class MSU:
                     ;"""
             cur.execute(query, (seat_remain, seat_available, cr_id, seat_remain, seat_available))
             con.commit()
+        print(f'{coursecode} complete!')
 
         # check next page
         # try:
