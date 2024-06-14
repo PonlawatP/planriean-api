@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "bun --watch index.js",
     "build": "bun build index.js --outdir ./out --target node",
-    "start": "bun index.js",
-    "start-prod": "NODE_ENV=production bun ./out/index.js",
+    "start-dev": "bun index.js",
+    "start": "bun ./out/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

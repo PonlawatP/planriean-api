@@ -55,6 +55,15 @@ async function getCoursesSpecific(req, res) {
     // }
 
     // console.log(major_groups);
+    const result_updated = await db.query(
+      `SELECT to_char(
+          refresh_updated_at AT TIME ZONE 'UTC' + interval '543 years',
+          'DD/MM/YY HH24:MI:SS'
+      ) AS formatted_date FROM university_detail WHERE LOWER(uni_key) = LOWER($1)`,
+      ["msu"]
+    );
+
+    const data_updated = result_updated.rows[0];
 
     const result = await db.query(
       `SELECT * FROM course_detail LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id WHERE year = $1 AND semester = $2 AND code SIMILAR TO $3`,
@@ -115,7 +124,7 @@ async function getCoursesSpecific(req, res) {
         return { ...r, "cr_id(1)": undefined };
       });
 
-    res.json({ updated: "test", subjects: searchResults });
+    res.json({ updated: data_updated, subjects: searchResults });
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal Server Error");
