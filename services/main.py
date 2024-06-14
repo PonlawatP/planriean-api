@@ -6,8 +6,10 @@ import psycopg2
 import configparser
 
 import datetime
+from datetime import date, datetime
 import time
 import multiprocessing
+import schedule
 
 # specify user/password/where the database is
 config = configparser.ConfigParser()
@@ -36,15 +38,38 @@ def getUniverselData():
     # con.close()
 
     if len(rows) == 1:
-        q = 'SELECT * from seamster_detail LEFT JOIN seamster_rounding ON seamster_detail.seamster_id = seamster_rounding.seamster_id WHERE uni_id = %s AND CURRENT_DATE <= ss_end ORDER BY ss_start;'
+        q = 'SELECT uni_id, year, seamster_round, ss_round, std_year, ss_start, ss_end from seamster_detail LEFT JOIN seamster_rounding ON seamster_detail.seamster_id = seamster_rounding.seamster_id WHERE uni_id = %s AND CURRENT_DATE <= ss_end ORDER BY ss_start;'
         cur.execute(q, (rows[0],))
         rows = cur.fetchall()
         con.commit()
 
-        for row in rows:
-            print(row)
+        # ถ้ามีวันที่โชว์
+        if len(rows) >= 1:
+            year = rows[0][1]
+            semaster = rows[0][2]
+            round = rows[0][3]
+            collegian_year = rows[0][4]
+            start_date = rows[0][5]
+            end_date = rows[0][6]
+            today = date.today()
 
-pg_i_main = 'main'
+            # print(start_date, today <= start_date,end_date, today <= end_date, start_date == today)
+
+        # for row in rows:
+        #     print(row)
+    return {
+        "collapsed": today <= start_date or today <= end_date,
+        "first_day": start_date == today,
+        "data": {
+            "year": year,
+            "semaster": semaster,
+            "round": round,
+            "collegian_year": collegian_year,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    }
+
 
 def getInput(state='m'):
     inp = input()
@@ -55,6 +80,7 @@ def getInput(state='m'):
 def startUp():
     m1res = []
     m2res = []
+    pg_i_main = 'main'
     while True:
         if pg_i_main == 'main':
             print("Planriean Data Service Script")
@@ -112,11 +138,13 @@ def startUp():
             pg_i_main = "main"
         print('==================================')
 
-def run_get_all_subjects():
+def run_get_all_subjects(year = 2567, semester = 1):
     m1res = config['scrap'].get('courses').split(',')
     start_time = time.time()
 
-    print("get subjects data")  # Output: 01
+    
+
+    # print("get subjects data")  # Output: 01
     # print("GE")  # Output: 01
     # MSU.scrap_courses_data(year=year, semester=semester, coursecode='00*')
     tasks = []
@@ -133,12 +161,62 @@ def run_get_all_subjects():
 
     end_time = time.time()
     process_time = end_time - start_time
-    print(f"Process time: {process_time} seconds")
+    current_time = datetime.now().strftime("%H:%M:%S")
+    print(f"{current_time}: done in {process_time:.2f} seconds.")
 
 if __name__ == '__main__':
-    year = 2567
-    semester = 1
     # m1res = MSU.scrap_fac_data()
-    run_get_all_subjects()
-    
-    # getUniverselData()
+    # run_get_all_subjects()
+    # startUp()
+
+    r = None
+    isRegisScrapRunning = False
+    scheduled_job = None
+
+    def runningRegisScrap():
+        global r, scheduled_job, isRegisScrapRunning
+        # print('sad')
+        run_get_all_subjects(r['data']['year'],r['data']['semaster'])
+
+    def checkingRegisTime():
+        global r, scheduled_job, isRegisScrapRunning
+        # ดึงข้อมูลที่เกี่ยวกับช่วงวันที่ลงทะเบียนมาเช็คก่อน
+        r = getUniverselData()
+        # print(r)
+
+        
+        if r['collapsed'] == True and isRegisScrapRunning == False:
+            print("\t== In-Registration Event Detected ==\n")
+            # ถ้าเข้า gap ลงทะเบียน => 5 วิโหลดข้อมูล
+            if scheduled_job is not None:
+                schedule.cancel_job(scheduled_job)
+
+            runningRegisScrap()
+            isRegisScrapRunning = True
+            scheduled_job = schedule.every(5).seconds.do(runningRegisScrap)
+        elif r['collapsed'] == False:
+            # ถ้าไม่เข้า gap ลงทะเบียน โหลดข้อมูลวันละครั้ง
+            if scheduled_job is not None:
+                schedule.cancel_job(scheduled_job)
+
+            runningRegisScrap()
+            isRegisScrapRunning = False
+            scheduled_job = schedule.every(86400).seconds.do(runningRegisScrap)
+
+    # first run. then leave it to schedule
+    scr = config['scrap'].get('courses')
+
+    print("\nPlanriean Subjects Scraping System")
+    print(f'  Get {len(scr.split(","))} Courses:')
+    print(f'  {scr}')
+    print("")
+    print("  Time Checking...\n")
+    checkingRegisTime()
+    schedule.every(3600).seconds.do(checkingRegisTime)
+
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Program interrupted by user. Exiting gracefully...")

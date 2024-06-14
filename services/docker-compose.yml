@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  subj-api-1:
+    image: subj-api:latest
+    restart: unless-stopped
+    hostname: subj-api-1
+    domainname: dev
+    container_name: subj-api-1
+    ports:
+      - "3030:3030"
+    networks:
+      - planriean
+  subj-api-2:
+    image: subj-api:latest
+    restart: unless-stopped
+    hostname: subj-api-2
+    domainname: dev
+    container_name: subj-api-2
+    ports:
+      - "3031:3030"
+    networks:
+      - planriean
+
+networks:
+  planriean:
