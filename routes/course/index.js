@@ -63,7 +63,7 @@ async function getCoursesSpecific(req, res) {
       ["msu"]
     );
 
-    const data_updated = result_updated.rows[0];
+    const data_updated = result_updated.rows[0].formatted_date;
 
     const result = await db.query(
       `SELECT * FROM course_detail LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id WHERE year = $1 AND semester = $2 AND code SIMILAR TO $3`,

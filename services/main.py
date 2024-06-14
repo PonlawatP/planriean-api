@@ -1,5 +1,4 @@
 # Import modules
-import os
 from university.msu import MSU
 
 import psycopg2
@@ -139,10 +138,10 @@ def startUp():
         print('==================================')
 
 def run_get_all_subjects(year = 2567, semester = 1):
+    global isRegisScrapRunning
     m1res = config['scrap'].get('courses').split(',')
     start_time = time.time()
 
-    
 
     # print("get subjects data")  # Output: 01
     # print("GE")  # Output: 01
@@ -151,7 +150,7 @@ def run_get_all_subjects(year = 2567, semester = 1):
     # tasks.append((year, semester, None, '00*'))
     for i in m1res:
         formatted_number = str(i).zfill(2)
-        tasks.append((year, semester, None, f'{formatted_number}*'))
+        tasks.append((year, semester, None, f'{formatted_number}*', isRegisScrapRunning == False))
         # print(formatted_number)  # Output: 01
         # MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
         # m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))
@@ -164,23 +163,31 @@ def run_get_all_subjects(year = 2567, semester = 1):
     current_time = datetime.now().strftime("%H:%M:%S")
     print(f"{current_time}: done in {process_time:.2f} seconds.")
 
+r = None
+isRegisScrapRunning = False
+scheduled_job = None
+
 if __name__ == '__main__':
     # m1res = MSU.scrap_fac_data()
     # run_get_all_subjects()
     # startUp()
 
-    r = None
-    isRegisScrapRunning = False
-    scheduled_job = None
-
+    registration_refresh_inteval = config['scrap'].get('registration_refresh_inteval')
+    isTaskScrap = False
     def runningRegisScrap():
-        global r, scheduled_job, isRegisScrapRunning
+        global r, isTaskScrap
+        # ถ้าของเก่ายังทำไม่เสร็จ => Dump
+        if isTaskScrap == True:
+            return
+        
+        isTaskScrap = True
         # print('sad')
         run_get_all_subjects(r['data']['year'],r['data']['semaster'])
         uni_key = config['scrap'].get('university')
         query = 'UPDATE "public"."university_detail" SET "refresh_updated_at" = %s WHERE LOWER(uni_key) = LOWER(%s);'
         cur.execute(query, (datetime.now(), uni_key,))
         con.commit()
+        isTaskScrap = False
 
     def checkingRegisTime():
         global r, scheduled_job, isRegisScrapRunning
@@ -197,7 +204,7 @@ if __name__ == '__main__':
 
             runningRegisScrap()
             isRegisScrapRunning = True
-            scheduled_job = schedule.every(5).seconds.do(runningRegisScrap)
+            scheduled_job = schedule.every(int(registration_refresh_inteval)).seconds.do(runningRegisScrap)
         elif r['collapsed'] == False:
             # ถ้าไม่เข้า gap ลงทะเบียน โหลดข้อมูลวันละครั้ง
             if scheduled_job is not None:
@@ -209,10 +216,17 @@ if __name__ == '__main__':
 
     # first run. then leave it to schedule
     scr = config['scrap'].get('courses')
+    uni_key = config['scrap'].get('university')
+    query = 'select uni_id from university_detail where LOWER(uni_key) = LOWER(%s);'
+    cur.execute(query, (uni_key,))
+    row = cur.fetchone()
+    con.commit()
 
     print("\nPlanriean Subjects Scraping System")
+    print(f'  {uni_key.upper()}\'s ID: {row}')
     print(f'  Get {len(scr.split(","))} Courses:')
-    print(f'  {scr}')
+    print(f'    {scr}')
+    print(f'  every: {registration_refresh_inteval} seconds')
     print("")
     print("  Time Checking...\n")
     checkingRegisTime()

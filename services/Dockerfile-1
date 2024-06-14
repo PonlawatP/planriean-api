@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3
+FROM python:3.9-alpine
 # Create a directory for your app
 WORKDIR /subj_api_app
 
@@ -12,4 +12,4 @@ COPY ./main.py ./main.py
 # Install Python and Node.js dependencies (replace with actual commands)
 RUN pip install -r requirements.txt
 
-CMD ["python3", "main.py"]
+CMD ["python", "./main.py"]

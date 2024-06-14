@@ -7,11 +7,11 @@ import json
 from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 import warnings
 import requests
-import threading
 import psycopg2
 import configparser
 
 from urllib.parse import urlparse, parse_qs
+from psycopg2.extras import execute_values
 
 # Set headers
 headers = {
@@ -343,7 +343,7 @@ class MSU:
         # - จำนวนที่นั่งที่เหลือ : เก็บใน course_seat
         # - จำนวนที่นั่งที่เปิดรับทั้งหมด : เก็บใน course_seat
     @staticmethod
-    def scrap_courses_data(year = 2566, semester = 2, f_data: str = None, coursecode:str = "00*", debug = False):
+    def scrap_courses_data(year = 2566, semester = 2, f_data: str = None, coursecode:str = "00*", init_coursedata = True, debug = False):
         if debug:
             print(f'scraping {coursecode}')
         # set post data
@@ -379,6 +379,8 @@ class MSU:
         uni_id = MSU.getUniversityID("MSU")
         # Iterate over each row and extract the required information
         # print(rows)
+        bulk_sql_1 = []
+        bulk_sql_2 = []
         for row in rows:
             cells = row.find_all('td')
             seat_available = int(cells[6].text.strip())
@@ -468,36 +470,53 @@ class MSU:
                 except:
                     pass
 
+            bulk_sql_1.append((uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code))
+            bulk_sql_2.append((seat_remain, seat_available, uni_id, year, semester, code, sec, seat_remain, seat_available))
+
+        if len(bulk_sql_2) > 0:
             cur = con.cursor()
-            # insert - update subject data
-            # print(uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code)
-            query = """
+            if init_coursedata == True:
+                query = """
                     INSERT INTO course_detail (uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, exam_mid, exam_final, suj_real_code)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES %s
                     ON CONFLICT (uni_id, year, semester, sec, code)
                     DO UPDATE SET
-                        note = %s,
-                        time = %s,
-                        lecturer = %s,
-                        exam_mid = %s,
-                        exam_final = %s
-                    RETURNING cr_id
-                    ;"""
-            cur.execute(query, (uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code, note, time, lecturer, mid, final))
-            cr_id = cur.fetchone()[0]
-            con.commit()
-            # insert - update seat data
-            # print(uni_id, year, semester, code, sec, seat_remain, seat_available)
+                        note = EXCLUDED.note,
+                        time = EXCLUDED.time,
+                        lecturer = EXCLUDED.lecturer,
+                        exam_mid = EXCLUDED.exam_mid,
+                        exam_final = EXCLUDED.exam_final
+                    ;
+                """
+                unique_data = list({(d[0], d[1], d[2], d[8], d[3]): d for d in bulk_sql_1}.values())
+                execute_values(cur, query, unique_data)
+
             query = """
-                    INSERT INTO course_seat (seat_remain, seat_available, cr_id)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (cr_id)
-                    DO UPDATE SET
-                        seat_remain = %s,
-                        seat_available = %s
+                        INSERT INTO course_seat (seat_remain, seat_available, cr_id)
+                        SELECT
+                            data.seat_remain, data.seat_available, cd.cr_id
+                        FROM
+                            course_detail cd,
+                            (VALUES %s) AS data (seat_remain, seat_available, uni_id, year, semester, code, sec, update_seat_remain, update_seat_available)
+                        WHERE
+                            cd.uni_id = data.uni_id AND
+                            cd.year = data.year AND
+                            cd.semester = data.semester AND
+                            cd.code = data.code AND
+                            cd.sec = data.sec
+                        ON CONFLICT (cr_id)
+                        DO UPDATE SET
+                            seat_remain = EXCLUDED.seat_remain,
+                            seat_available = EXCLUDED.seat_available
+                        ;
                     ;"""
-            cur.execute(query, (seat_remain, seat_available, cr_id, seat_remain, seat_available))
+            # cur.execute(query, (seat_remain, seat_available, uni_id, year, semester, code, sec, seat_remain, seat_available))
+            # Remove duplicates from the data
+            unique_data = list({(d[2], d[3], d[4], d[5], d[6]): d for d in bulk_sql_2}.values())
+            execute_values(cur, query, unique_data)
             con.commit()
+
+
 
         if debug:
             print(f'{coursecode} complete!')
