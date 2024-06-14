@@ -177,6 +177,10 @@ if __name__ == '__main__':
         global r, scheduled_job, isRegisScrapRunning
         # print('sad')
         run_get_all_subjects(r['data']['year'],r['data']['semaster'])
+        uni_key = config['scrap'].get('university')
+        query = 'UPDATE "public"."university_detail" SET "refresh_updated_at" = %s WHERE LOWER(uni_key) = LOWER(%s);'
+        cur.execute(query, (datetime.now(), uni_key,))
+        con.commit()
 
     def checkingRegisTime():
         global r, scheduled_job, isRegisScrapRunning
@@ -219,4 +223,5 @@ if __name__ == '__main__':
             schedule.run_pending()
             time.sleep(1)
     except KeyboardInterrupt:
+        con.close()
         print("Program interrupted by user. Exiting gracefully...")
