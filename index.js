@@ -93,11 +93,11 @@ app.get("/university/:uni_id/season", getUniversitySeasons);
 // TODO: code here
 /** end admin section */
 
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log("Planriean Subjects Service");
   console.log("Version: " + pjson.version);
   console.log("Port: " + port);
-  ready = true;
+  // ready = true;
 });
 
 // // Run a schedule
