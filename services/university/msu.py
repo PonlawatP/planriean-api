@@ -342,6 +342,7 @@ class MSU:
         # - รหัสรายวิชาตามจริง (ใช้เพื่อดึงข้อมูล)
         # - จำนวนที่นั่งที่เหลือ : เก็บใน course_seat
         # - จำนวนที่นั่งที่เปิดรับทั้งหมด : เก็บใน course_seat
+    @staticmethod
     def scrap_courses_data(year = 2566, semester = 2, f_data: str = None, coursecode:str = "00*", debug = False):
         if debug:
             print(f'scraping {coursecode}')
@@ -373,7 +374,7 @@ class MSU:
         # Find all rows in the table, excluding the header and footer rows ([หน้าก่อน] [หน้าต่อไป])
         rows = soup.select('table > tbody > tr')[3:-1]
         # print(rows)
-        
+
 
         uni_id = MSU.getUniversityID("MSU")
         # Iterate over each row and extract the required information

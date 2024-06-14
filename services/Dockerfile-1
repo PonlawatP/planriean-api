@@ -1,0 +1,15 @@
+# Use an official Python runtime as a parent image
+FROM python:3
+# Create a directory for your app
+WORKDIR /subj_api_app
+
+# COPY . .
+COPY ./university ./university
+COPY ./pg_config_1.ini ./pg_config.ini
+COPY ./requirements.txt ./requirements.txt
+COPY ./main.py ./main.py
+
+# Install Python and Node.js dependencies (replace with actual commands)
+RUN pip install -r requirements.txt
+
+CMD ["python3", "main.py"]
