@@ -16,7 +16,7 @@ async function getCoursesSpecific(req, res) {
     let searchData = req.body;
 
     if (searchData.type.length == 0) {
-      searchData.type = ["00*"];
+      searchData.type = ["004*"];
     }
 
     // console.log(searchData);

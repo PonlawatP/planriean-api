@@ -9,6 +9,7 @@ from datetime import date, datetime
 import time
 import multiprocessing
 import schedule
+import asyncio
 
 # specify user/password/where the database is
 config = configparser.ConfigParser()
@@ -26,7 +27,6 @@ query_schema = 'SET search_path to ' + schema_name + ';'
 con = psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host)
 
 cur = con.cursor()
-
 
 def getUniverselData():
     uni_key = config['scrap'].get('university')
@@ -50,15 +50,15 @@ def getUniverselData():
             collegian_year = rows[0][4]
             start_date = rows[0][5]
             end_date = rows[0][6]
-            today = date.today()
 
-            # print(start_date, today <= start_date,end_date, today <= end_date, start_date == today)
+            # print(start_date, today < start_date,end_date, today <= end_date, start_date == today, not (today < start_date and today <= end_date))
 
         # for row in rows:
         #     print(row)
     return {
-        "collapsed": today <= start_date or today <= end_date,
-        "first_day": start_date == today,
+        "collapsed": not (date.today() < start_date and date.today() <= end_date),
+        "first_day": start_date == date.today(),
+        "time": date.today(),
         "data": {
             "year": year,
             "semaster": semaster,
@@ -137,7 +137,7 @@ def startUp():
             pg_i_main = "main"
         print('==================================')
 
-def run_get_all_subjects(year = 2567, semester = 1):
+async def run_get_all_subjects(year = 2567, semester = 1):
     global isRegisScrapRunning
     m1res = config['scrap'].get('courses').split(',')
     start_time = time.time()
@@ -155,87 +155,100 @@ def run_get_all_subjects(year = 2567, semester = 1):
         # MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
         # m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))
 
-    with multiprocessing.Pool() as pool:
+    ctx = multiprocessing.get_context('spawn')
+    with ctx.Pool() as pool:
         pool.starmap(MSU.scrap_courses_data, tasks)
+
+    # print('sad')
 
     end_time = time.time()
     process_time = end_time - start_time
     current_time = datetime.now().strftime("%H:%M:%S")
     print(f"{current_time}: done in {process_time:.2f} seconds.")
 
-r = None
-isRegisScrapRunning = False
-scheduled_job = None
+
 
 if __name__ == '__main__':
     # m1res = MSU.scrap_fac_data()
     # run_get_all_subjects()
     # startUp()
 
-    registration_refresh_inteval = config['scrap'].get('registration_refresh_inteval')
-    isTaskScrap = False
-    def runningRegisScrap():
-        global r, isTaskScrap
-        # ถ้าของเก่ายังทำไม่เสร็จ => Dump
-        if isTaskScrap == True:
-            return
-        
-        isTaskScrap = True
-        # print('sad')
-        run_get_all_subjects(r['data']['year'],r['data']['semaster'])
-        uni_key = config['scrap'].get('university')
-        query = 'UPDATE "public"."university_detail" SET "refresh_updated_at" = %s WHERE LOWER(uni_key) = LOWER(%s);'
-        cur.execute(query, (datetime.now(), uni_key,))
-        con.commit()
-        isTaskScrap = False
-
-    def checkingRegisTime():
-        global r, scheduled_job, isRegisScrapRunning
-        # ดึงข้อมูลที่เกี่ยวกับช่วงวันที่ลงทะเบียนมาเช็คก่อน
-        r = getUniverselData()
-        # print(r)
-
-        
-        if r['collapsed'] == True and isRegisScrapRunning == False:
-            print("\t== In-Registration Event Detected ==\n")
-            # ถ้าเข้า gap ลงทะเบียน => 5 วิโหลดข้อมูล
-            if scheduled_job is not None:
-                schedule.cancel_job(scheduled_job)
-
-            runningRegisScrap()
-            isRegisScrapRunning = True
-            scheduled_job = schedule.every(int(registration_refresh_inteval)).seconds.do(runningRegisScrap)
-        elif r['collapsed'] == False:
-            # ถ้าไม่เข้า gap ลงทะเบียน โหลดข้อมูลวันละครั้ง
-            if scheduled_job is not None:
-                schedule.cancel_job(scheduled_job)
-
-            runningRegisScrap()
-            isRegisScrapRunning = False
-            scheduled_job = schedule.every(86400).seconds.do(runningRegisScrap)
-
-    # first run. then leave it to schedule
-    scr = config['scrap'].get('courses')
-    uni_key = config['scrap'].get('university')
-    query = 'select uni_id from university_detail where LOWER(uni_key) = LOWER(%s);'
-    cur.execute(query, (uni_key,))
-    row = cur.fetchone()
-    con.commit()
-
-    print("\nPlanriean Subjects Scraping System")
-    print(f'  {uni_key.upper()}\'s ID: {row}')
-    print(f'  Get {len(scr.split(","))} Courses:')
-    print(f'    {scr}')
-    print(f'  every: {registration_refresh_inteval} seconds')
-    print("")
-    print("  Time Checking...\n")
-    checkingRegisTime()
-    schedule.every(3600).seconds.do(checkingRegisTime)
+    r = None
+    isRegisScrapRunning = False
+    scheduled_job = None
+    loop = asyncio.get_event_loop()
 
     try:
+        multiprocessing.freeze_support()
+        registration_refresh_inteval = config['scrap'].get('registration_refresh_inteval')
+        isTaskScrap = False
+
+        def runningRegisScrap():
+            global r, isTaskScrap
+            # ถ้าของเก่ายังทำไม่เสร็จ => Dump
+            if isTaskScrap == True:
+                return
+
+            isTaskScrap = True
+            uni_key = config['scrap'].get('university')
+            # print(r['data']['year'],r['data']['semaster'],datetime.now(), uni_key)
+
+            tasks = [
+                loop.create_task(run_get_all_subjects(r['data']['year'],r['data']['semaster'])),
+            ]
+            loop.run_until_complete(asyncio.wait(tasks))
+            # # print('sad 4')
+            query = 'UPDATE "public"."university_detail" SET "refresh_updated_at" = %s WHERE LOWER(uni_key) = LOWER(%s);'
+            cur.execute(query, (datetime.now(), uni_key,))
+            con.commit()
+
+            isTaskScrap = False
+
+        def checkingRegisTime():
+            global r, scheduled_job, isRegisScrapRunning
+            # ดึงข้อมูลที่เกี่ยวกับช่วงวันที่ลงทะเบียนมาเช็คก่อน
+            r = getUniverselData()
+            # print(r)
+            print(f'  Time Checking ({r["time"]})...\n')
+            if r['collapsed'] == True and isRegisScrapRunning == False:
+                print("\t== In-Registration Event Detected ==\n")
+                # ถ้าเข้า gap ลงทะเบียน => 5 วิโหลดข้อมูล
+                if scheduled_job is not None:
+                    schedule.cancel_job(scheduled_job)
+                isRegisScrapRunning = True
+                runningRegisScrap()
+                scheduled_job = schedule.every(int(registration_refresh_inteval)).seconds.do(runningRegisScrap)
+            elif r['collapsed'] == False:
+                # ถ้าไม่เข้า gap ลงทะเบียน โหลดข้อมูลวันละครั้ง
+                if scheduled_job is not None:
+                    schedule.cancel_job(scheduled_job)
+                isRegisScrapRunning = False
+                runningRegisScrap()
+                scheduled_job = schedule.every(86400).seconds.do(runningRegisScrap)
+
+        # first run. then leave it to schedule
+        scr = config['scrap'].get('courses')
+        uni_key = config['scrap'].get('university')
+        query = 'select uni_id from university_detail where LOWER(uni_key) = LOWER(%s);'
+        cur.execute(query, (uni_key,))
+        row = cur.fetchone()
+        con.commit()
+
+        print("\nPlanriean Subjects Scraping System")
+        print(f'  {uni_key.upper()}\'s ID: {row}')
+        print(f'  Get {len(scr.split(","))} Courses:')
+        print(f'    {scr}')
+        print(f'  every: {registration_refresh_inteval} seconds')
+        print("")
+
+        checkingRegisTime()
+        schedule.every(3600).seconds.do(checkingRegisTime)
+
         while True:
             schedule.run_pending()
             time.sleep(1)
     except KeyboardInterrupt:
+        loop.close()
+        cur.close()
         con.close()
         print("Program interrupted by user. Exiting gracefully...")

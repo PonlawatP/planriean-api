@@ -208,7 +208,28 @@ async function getSubjectGroups(req, res) {
       [1]
     );
     const crs_sujs = await db.query(
-      "SELECT code, name_en from course_detail WHERE year = $1 and semester = $2 AND uni_id = $3 GROUP BY code, name_en ORDER BY code asc;",
+      `
+      SELECT 
+          course_detail.code, 
+          course_detail.name_en, 
+          courseset_subject.suj_name_th as name_th
+      FROM 
+          course_detail 
+      LEFT JOIN 
+          courseset_subject 
+      ON 
+          courseset_subject.suj_real_id = course_detail.suj_real_code 
+      WHERE 
+          course_detail.year = $1 
+          AND course_detail.semester = $2 
+          AND course_detail.uni_id = $3 
+      GROUP BY
+          course_detail.code,
+          course_detail.name_en,
+          courseset_subject.suj_name_th 
+      ORDER BY 
+          course_detail.code ASC;
+      `,
       [year, semester, 1]
     );
     // console.log(crs.rows);

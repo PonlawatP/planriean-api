@@ -63,7 +63,7 @@ async function authFromToken(req, res) {
     res.json(result);
   } catch (err) {
     console.error(err);
-    res.status(403).send("Invalid Token");
+    res.status(403).json({ message: "Invalid Token" });
   }
 }
 
@@ -87,11 +87,11 @@ async function authGetUser(req, res) {
     if (result != null) {
       res.json(result);
     } else {
-      res.status(404).send("No User Found");
+      res.status(404).json({ message: "No User Found" });
     }
   } catch (err) {
     console.error(err);
-    res.status(403).send("Invalid Input");
+    res.status(403).json({ message: "Invalid Input" });
   }
 }
 

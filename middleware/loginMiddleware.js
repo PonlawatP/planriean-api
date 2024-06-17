@@ -18,16 +18,16 @@ const loginMiddleware = async (req, res, next) => {
       if (isMatch) {
         next();
       } else {
-        res.status(401).send("Invalid Username or password");
+        res.status(401).json({ message: "Invalid Username or password" });
       }
     } else {
       // 404 - No User Found
-      res.status(401).send("Invalid Username or password");
+      res.status(401).json({ message: "Invalid Username or password" });
     }
   } catch (err) {
     console.error(err);
     // 403 - Invalid Input
-    res.status(401).send("Invalid Username or password");
+    res.status(401).json({ message: "Invalid Username or password" });
   }
 };
 module.exports = {

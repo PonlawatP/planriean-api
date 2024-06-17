@@ -15,7 +15,7 @@ COPY ./package.json ./package.json
 COPY ./package-lock.json ./package-lock.json
 COPY ./.env.production ./.env
 RUN bun install --frozen-lockfile --production
-RUN bun run build
+# RUN bun run build
 
 # run the app
 USER bun

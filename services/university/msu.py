@@ -342,7 +342,6 @@ class MSU:
         # - รหัสรายวิชาตามจริง (ใช้เพื่อดึงข้อมูล)
         # - จำนวนที่นั่งที่เหลือ : เก็บใน course_seat
         # - จำนวนที่นั่งที่เปิดรับทั้งหมด : เก็บใน course_seat
-    @staticmethod
     def scrap_courses_data(year = 2566, semester = 2, f_data: str = None, coursecode:str = "00*", init_coursedata = True, debug = False):
         if debug:
             print(f'scraping {coursecode}')
@@ -406,7 +405,7 @@ class MSU:
                     time_temp_res.append(t_str)
             time = ';'.join(time_temp_res)
             sec = int(cells[5].text.strip())
-            seat_remain = int(cells[8].text.strip())
+            seat_remain = int(cells[7].text.strip())
             
             # print(code, subject_data, name, credit, time, sec, seat_remain, seat_available)
 
@@ -515,8 +514,6 @@ class MSU:
             unique_data = list({(d[2], d[3], d[4], d[5], d[6]): d for d in bulk_sql_2}.values())
             execute_values(cur, query, unique_data)
             con.commit()
-
-
 
         if debug:
             print(f'{coursecode} complete!')
