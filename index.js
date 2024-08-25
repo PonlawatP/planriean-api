@@ -46,6 +46,7 @@ const {
   a_addCoursesetSubject,
   a_removeCoursesetSubject,
   a_editCoursesetSubject,
+  getCoursesetMapping,
 } = require("./routes/course-set");
 const {
   getUserSubjectHistory,
@@ -102,6 +103,7 @@ app.post("/course/:year/:semester", getCoursesSpecific);
 app.get("/course/:year/:semester/group", getSubjectGroups);
 app.get("/course/:year/:semester/lecturer", getLectureGroups);
 app.get("/university/:uni_id/course-set/:id", getCoursesetDetail);
+app.get("/university/:uni_id/course-set/:id/map", getCoursesetMapping);
 
 app.get("/university/", getUniversityList);
 app.get("/university/:uni_id", getUniversityDetail);

@@ -56,6 +56,82 @@ async function getCoursesetDetail(req, res) {
     res.status(404).send("Courseset Not Found");
   }
 }
+async function getCoursesetMapping(req, res) {
+  try {
+    const user = await getUserFromToken(req);
+    const { id } = req.params;
+    if (user != null) {
+      const cr = await db.query(
+        "SELECT * FROM courseset_detail WHERE cr_id = $1;",
+        [id]
+      );
+
+      if (cr.rows.length > 0) {
+        const crs = await db.query(
+          "SELECT * FROM courseset_subjectplan WHERE cr_id = $1 ORDER BY cr_id;",
+          [id]
+        );
+        const subjectsData = await db.query(
+          "SELECT * FROM courseset_subject WHERE cr_id = $1;",
+          [id]
+        );
+        const headersData = await db.query(
+          "SELECT * FROM courseset_header WHERE cr_id = $1;",
+          [id]
+        );
+
+        let pre_result = {};
+
+        crs.rows.forEach((item) => {
+          const year = item.std_year;
+          const { term, suj_id } = item;
+          const credit = parseInt(item.credit.match(/\d+/)[0]); // Extract the number from credit
+
+          if (!pre_result[year]) {
+            pre_result[year] = {
+              semesters: {},
+            };
+          }
+
+          if (!pre_result[year].semesters[term]) {
+            pre_result[year].semesters[term] = {
+              subjects: {},
+            };
+          }
+
+          const subjectIndex = Object.keys(
+            pre_result[year].semesters[term].subjects
+          ).length;
+          pre_result[year].semesters[term].subjects[subjectIndex] = {
+            ...(suj_id.includes("h-")
+              ? {
+                  ...headersData.rows.find(
+                    (f) => f.cr_head_id == suj_id.split("h-")[1]
+                  ),
+                }
+              : {
+                  suj_id: suj_id,
+                  ...subjectsData.rows.find((f) => f.suj_id == suj_id),
+                }),
+            credit: credit,
+          };
+        });
+
+        const result = {
+          years: pre_result,
+        };
+        res.json(result);
+      } else {
+        throw new Error("error!");
+      }
+    } else {
+      throw new Error("error!");
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(404).send("Courseset Not Found");
+  }
+}
 async function getCoursesetSubject(req, res) {
   try {
     const user = await getUserFromToken(req);
@@ -802,6 +878,7 @@ async function a_addCoursesetSubjectRestrictedGroup(req, res) {
 
 module.exports = {
   getCoursesetDetail,
+  getCoursesetMapping,
   getCoursesetSubject,
   getCoursesetSubjectRestricted,
   getSubjectGroups,
