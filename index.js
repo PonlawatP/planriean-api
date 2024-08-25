@@ -34,11 +34,19 @@ const {
 } = require("./routes/plan");
 const {
   getCoursesetDetail,
-  getCoursesetSubject,
   getCoursesetSubjectRestricted,
   getSubjectGroups,
   getLectureGroups,
-} = require("./routes/courseset");
+  a_addCoursesetDetail,
+  a_editCoursesetDetail,
+  a_removeCoursesetDetail,
+  a_removeCoursesetHeader,
+  a_editCoursesetHeader,
+  a_addCoursesetHeader,
+  a_addCoursesetSubject,
+  a_removeCoursesetSubject,
+  a_editCoursesetSubject,
+} = require("./routes/course-set");
 const {
   getUserSubjectHistory,
   updateUserSubjectHistory,
@@ -47,7 +55,18 @@ const {
   getUniversityList,
   getUniversityDetail,
   getUniversitySeasons,
+  addUniversityDetail,
+  editUniversityDetail,
+  removeUniversityDetail,
+  addFacultyDetail,
+  removeFacultyDetail,
+  editFacultyDetail,
 } = require("./routes/university");
+const {
+  a_addCoursesetGroupDetail,
+  a_editCourseSetGroupDetail,
+  a_removeCoursesetGroupDetail,
+} = require("./routes/course-set-group");
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json({ limit: "6mb" }));
@@ -82,15 +101,94 @@ app.get("/course", getCourses);
 app.post("/course/:year/:semester", getCoursesSpecific);
 app.get("/course/:year/:semester/group", getSubjectGroups);
 app.get("/course/:year/:semester/lecturer", getLectureGroups);
-app.get("/courseset/:id/detail", getCoursesetDetail);
-app.get("/courseset/:id/subject", getCoursesetSubject);
+app.get("/university/:uni_id/course-set/:id", getCoursesetDetail);
 
 app.get("/university/", getUniversityList);
 app.get("/university/:uni_id", getUniversityDetail);
 app.get("/university/:uni_id/season", getUniversitySeasons);
 
 /** admin section */
-// TODO: code here
+// university
+app.post("/university", requireJWTAuth, addUniversityDetail);
+app.put("/university/:uni_id", requireJWTAuth, editUniversityDetail);
+app.delete("/university/:uni_id", requireJWTAuth, removeUniversityDetail);
+// faculty
+app.post("/university/:uni_id/faculty", requireJWTAuth, addFacultyDetail);
+app.put(
+  "/university/:uni_id/faculty/:fac_id",
+  requireJWTAuth,
+  editFacultyDetail
+);
+app.delete(
+  "/university/:uni_id/faculty/:fac_id",
+  requireJWTAuth,
+  removeFacultyDetail
+);
+// course-set group
+app.post(
+  "/university/:uni_id/course-set-group",
+  requireJWTAuth,
+  a_addCoursesetGroupDetail
+);
+app.put(
+  "/university/:uni_id/course-set-group/:cr_group_id",
+  requireJWTAuth,
+  a_editCourseSetGroupDetail
+);
+app.delete(
+  "/university/:uni_id/course-set-group/:cr_group_id",
+  requireJWTAuth,
+  a_removeCoursesetGroupDetail
+);
+// course-set detail
+app.post(
+  "/university/:uni_id/course-set",
+  requireJWTAuth,
+  a_addCoursesetDetail
+);
+app.put(
+  "/university/:uni_id/course-set/:cr_id",
+  requireJWTAuth,
+  a_editCoursesetDetail
+);
+app.delete(
+  "/university/:uni_id/course-set/:cr_id",
+  requireJWTAuth,
+  a_removeCoursesetDetail
+);
+// course-set header
+app.post(
+  "/university/:uni_id/course-set/:cr_id/header",
+  requireJWTAuth,
+  a_addCoursesetHeader
+);
+app.put(
+  "/university/:uni_id/course-set/:cr_id/header/:cr_head_id",
+  requireJWTAuth,
+  a_editCoursesetHeader
+);
+app.delete(
+  "/university/:uni_id/course-set/:cr_id/header/:cr_head_id",
+  requireJWTAuth,
+  a_removeCoursesetHeader
+);
+// course-set course - subjects in course_set
+app.post(
+  "/university/:uni_id/course-set/:cr_id/course",
+  requireJWTAuth,
+  a_addCoursesetSubject
+);
+app.put(
+  "/university/:uni_id/course-set/:cr_id/course/:suj_id",
+  requireJWTAuth,
+  a_editCoursesetSubject
+);
+app.delete(
+  "/university/:uni_id/course-set/:cr_id/course/:suj_id",
+  requireJWTAuth,
+  a_removeCoursesetSubject
+);
+
 /** end admin section */
 
 app.listen(port, "0.0.0.0", () => {

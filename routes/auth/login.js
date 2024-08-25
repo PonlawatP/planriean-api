@@ -23,6 +23,7 @@ async function authFromToken(req, res) {
     // console.log(jwt_dc)
 
     // console.log(jwt_dc);
+    let result;
 
     if (jwt_dc.sub) {
       result = await getUserFromUsername(jwt_dc.sub);
@@ -30,7 +31,7 @@ async function authFromToken(req, res) {
       return;
     }
     // const user = jwt_dc.sub
-    let result = await getUserFromGoogle(jwt_dc.email);
+    result = await getUserFromGoogle(jwt_dc.email);
 
     if (result == null) {
       const bd = {

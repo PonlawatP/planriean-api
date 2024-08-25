@@ -27,3 +27,7 @@ node_modules*
 .env*
 .env
 /node_modules
+/services/build
+/services/dist
+services/pg_config.ini
+/node_modules

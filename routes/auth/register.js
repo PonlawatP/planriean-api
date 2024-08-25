@@ -59,7 +59,7 @@ async function registerUser(req, res) {
     res != null ? res.json({ success: true }) : () => {};
     return true;
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     res != null
       ? res
           .status(400)

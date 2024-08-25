@@ -78,7 +78,7 @@ async function getCoursesSpecific(req, res) {
       ]
     );
     const data = result.rows;
-
+    console.log(data);
     // console.log(
     //   searchData.code.length > 0
     //     ? searchData.code.join("|")

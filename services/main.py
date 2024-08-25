@@ -56,6 +56,7 @@ def getUniverselData():
         # for row in rows:
         #     print(row)
     return {
+        # TODO: it error when out of registration round date.
         "collapsed": not (date.today() < start_date and date.today() <= end_date),
         "first_day": start_date == date.today(),
         "time": date.today(),
@@ -148,9 +149,11 @@ async def run_get_all_subjects(year = 2567, semester = 1):
     # MSU.scrap_courses_data(year=year, semester=semester, coursecode='00*')
     tasks = []
     # tasks.append((year, semester, None, '00*'))
-    for i in m1res:
-        formatted_number = str(i).zfill(2)
-        tasks.append((year, semester, None, f'{formatted_number}*', isRegisScrapRunning == False))
+    tasks.append((year, semester, None, f'0505101', isRegisScrapRunning == False))
+
+    # for i in m1res:
+    #     formatted_number = str(i).zfill(2)
+    #     tasks.append((year, semester, None, f'{formatted_number}*', isRegisScrapRunning == False))
         # print(formatted_number)  # Output: 01
         # MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
         # m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))

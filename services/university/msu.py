@@ -469,6 +469,7 @@ class MSU:
                 except:
                     pass
 
+            # print(uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code)
             bulk_sql_1.append((uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, mid, final, suj_real_code))
             bulk_sql_2.append((seat_remain, seat_available, uni_id, year, semester, code, sec, seat_remain, seat_available))
 
@@ -478,7 +479,7 @@ class MSU:
                 query = """
                     INSERT INTO course_detail (uni_id, year, semester, code, name_en, note, credit, time, sec, lecturer, exam_mid, exam_final, suj_real_code)
                     VALUES %s
-                    ON CONFLICT (uni_id, year, semester, sec, code)
+                    ON CONFLICT (uni_id, year, semester, sec, code, suj_real_code)
                     DO UPDATE SET
                         note = EXCLUDED.note,
                         time = EXCLUDED.time,
@@ -487,7 +488,8 @@ class MSU:
                         exam_final = EXCLUDED.exam_final
                     ;
                 """
-                unique_data = list({(d[0], d[1], d[2], d[8], d[3]): d for d in bulk_sql_1}.values())
+                unique_data = list({(d[0], d[1], d[2], d[8], d[3], d[12]): d for d in bulk_sql_1}.values())
+                print(unique_data)
                 execute_values(cur, query, unique_data)
 
             query = """
