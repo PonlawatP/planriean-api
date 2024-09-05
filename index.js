@@ -69,6 +69,16 @@ const {
   a_editCourseSetGroupDetail,
   a_removeCoursesetGroupDetail,
 } = require("./routes/course-set-group");
+const {
+  getCourseRestrictGroups,
+  getCourseRestrictGroupData,
+  a_addCourseRestrictGroupUsers,
+  a_removeCourseRestrictGroupUsers,
+  a_addCourseRestrictGroupSubjects,
+  a_removeCourseRestrictGroupSubjects,
+  a_updateCourseRestrictGroupSubjects,
+  a_updateCourseRestrictGroupUsers,
+} = require("./routes/restricted-group");
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json({ limit: "6mb" }));
@@ -194,6 +204,37 @@ app.delete(
 
 // course-set mapping
 app.put("/university/:uni_id/course-set/:cr_id/map", a_editCoursesetMapping);
+
+// course-set restricted
+app.get("/university/:uni_id/restrict", getCourseRestrictGroups);
+app.get(
+  "/university/:uni_id/restrict/:cr_restgrp_id",
+  getCourseRestrictGroupData
+);
+app.post(
+  "/university/:uni_id/restrict/:cr_restgrp_id/user",
+  a_addCourseRestrictGroupUsers
+);
+app.delete(
+  "/university/:uni_id/restrict/:cr_restgrp_id/user",
+  a_removeCourseRestrictGroupUsers
+);
+app.put(
+  "/university/:uni_id/restrict/:cr_restgrp_id/user",
+  a_updateCourseRestrictGroupUsers
+);
+app.post(
+  "/university/:uni_id/restrict/:cr_restgrp_id/subject",
+  a_addCourseRestrictGroupSubjects
+);
+app.delete(
+  "/university/:uni_id/restrict/:cr_restgrp_id/subject",
+  a_removeCourseRestrictGroupSubjects
+);
+app.put(
+  "/university/:uni_id/restrict/:cr_restgrp_id/subject",
+  a_updateCourseRestrictGroupSubjects
+);
 
 /** end admin section */
 
