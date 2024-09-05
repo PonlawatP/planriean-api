@@ -47,6 +47,7 @@ const {
   a_removeCoursesetSubject,
   a_editCoursesetSubject,
   getCoursesetMapping,
+  a_editCoursesetMapping,
 } = require("./routes/course-set");
 const {
   getUserSubjectHistory,
@@ -102,8 +103,8 @@ app.get("/course", getCourses);
 app.post("/course/:year/:semester", getCoursesSpecific);
 app.get("/course/:year/:semester/group", getSubjectGroups);
 app.get("/course/:year/:semester/lecturer", getLectureGroups);
-app.get("/university/:uni_id/course-set/:id", getCoursesetDetail);
-app.get("/university/:uni_id/course-set/:id/map", getCoursesetMapping);
+app.get("/university/:uni_id/course-set/:cr_id", getCoursesetDetail);
+app.get("/university/:uni_id/course-set/:cr_id/map", getCoursesetMapping);
 
 app.get("/university/", getUniversityList);
 app.get("/university/:uni_id", getUniversityDetail);
@@ -190,6 +191,9 @@ app.delete(
   requireJWTAuth,
   a_removeCoursesetSubject
 );
+
+// course-set mapping
+app.put("/university/:uni_id/course-set/:cr_id/map", a_editCoursesetMapping);
 
 /** end admin section */
 

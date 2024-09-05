@@ -5,11 +5,11 @@ const { getUserFromToken, getUserFromUID } = require("../../utils/userutil");
 async function getCoursesetDetail(req, res) {
   try {
     const user = await getUserFromToken(req);
-    const { id } = req.params;
+    const { cr_id } = req.params;
     if (user != null) {
       const crs = await db.query(
         "SELECT * FROM courseset_detail WHERE cr_id = $1;",
-        [id]
+        [cr_id]
       );
       if (crs.rows.length > 0) {
         const crsr = crs.rows[0];
@@ -59,25 +59,25 @@ async function getCoursesetDetail(req, res) {
 async function getCoursesetMapping(req, res) {
   try {
     const user = await getUserFromToken(req);
-    const { id } = req.params;
+    const { cr_id } = req.params;
     if (user != null) {
       const cr = await db.query(
         "SELECT * FROM courseset_detail WHERE cr_id = $1;",
-        [id]
+        [cr_id]
       );
 
       if (cr.rows.length > 0) {
         const crs = await db.query(
           "SELECT * FROM courseset_subjectplan WHERE cr_id = $1 ORDER BY cr_id;",
-          [id]
+          [cr_id]
         );
         const subjectsData = await db.query(
           "SELECT * FROM courseset_subject WHERE cr_id = $1;",
-          [id]
+          [cr_id]
         );
         const headersData = await db.query(
           "SELECT * FROM courseset_header WHERE cr_id = $1;",
-          [id]
+          [cr_id]
         );
 
         let pre_result = {};
@@ -135,17 +135,17 @@ async function getCoursesetMapping(req, res) {
 async function getCoursesetSubject(req, res) {
   try {
     const user = await getUserFromToken(req);
-    const { id } = req.params;
+    const { cr_id } = req.params;
     if (user != null) {
       const crs = await db.query(
         "SELECT * FROM courseset_detail WHERE cr_id = $1;",
-        [id]
+        [cr_id]
       );
       if (crs.rows.length > 0) {
         const crsr = crs.rows[0];
         const courseset_header = await db.query(
           "SELECT * FROM courseset_header WHERE uni_id = $1 AND cr_id = $2;",
-          [crsr.uni_id, id]
+          [crsr.uni_id, cr_id]
         );
 
         function compareCrHeadId(a, b) {
@@ -171,7 +171,7 @@ async function getCoursesetSubject(req, res) {
         // TODO: add courseset subjects here
         const courseset_subject = await db.query(
           "SELECT * FROM courseset_subject WHERE uni_id = $1 AND cr_id = $2;",
-          [crsr.uni_id, id]
+          [crsr.uni_id, cr_id]
         );
 
         for (const head of sortedObjects) {
@@ -856,6 +856,59 @@ async function a_editCoursesetSubject(req, res) {
   }
 }
 
+async function a_editCoursesetMapping(req, res) {
+  try {
+    const user = await getUserFromToken(req);
+    const { uni_id, cr_id } = req.params;
+    const newData = req.body; // Assuming the new data is sent in the request body
+
+    // 1. Delete existing data for the given cr_id
+    await db.query("DELETE FROM courseset_subjectplan WHERE cr_id = $1", [
+      cr_id,
+    ]);
+
+    // 2. Insert the new data
+    for (let std_year = 0; std_year < newData.length; std_year++) {
+      for (const semesterData of newData[std_year]) {
+        const term = parseInt(semesterData.semester);
+        for (const subject of semesterData.subjects) {
+          const credit = subject.suj_credit || subject.credit; // Extract credit from suj_credit if not provided
+
+          const insertResult = await db.query(
+            `INSERT INTO courseset_subjectplan (cr_id, std_year, term, suj_id, credit)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+              cr_id,
+              std_year + 1,
+              term,
+              subject.suj_id || `h-${subject.cr_head_id}`,
+              credit,
+            ]
+          );
+
+          if (insertResult.rowCount === 0) {
+            throw new Error(
+              `Failed to insert subject ${subject.suj_id} for year ${
+                std_year + 1
+              }, term ${term}`
+            );
+          }
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Courseset Mapping updated successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to update Courseset Mapping" });
+  }
+}
+
 async function a_addCoursesetSubjectRestrictedGroup(req, res) {
   try {
     const user = await getUserFromToken(req);
@@ -892,4 +945,5 @@ module.exports = {
   a_addCoursesetSubject,
   a_removeCoursesetSubject,
   a_editCoursesetSubject,
+  a_editCoursesetMapping,
 };
