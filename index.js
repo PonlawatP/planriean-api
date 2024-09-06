@@ -78,6 +78,9 @@ const {
   a_removeCourseRestrictGroupSubjects,
   a_updateCourseRestrictGroupSubjects,
   a_updateCourseRestrictGroupUsers,
+  a_addCourseRestrictGroup,
+  a_editCourseRestrictGroup,
+  a_removeCourseRestrictGroup,
 } = require("./routes/restricted-group");
 app.use(express.json());
 app.use(cors());
@@ -207,6 +210,15 @@ app.put("/university/:uni_id/course-set/:cr_id/map", a_editCoursesetMapping);
 
 // course-set restricted
 app.get("/university/:uni_id/restrict", getCourseRestrictGroups);
+app.post("/university/:uni_id/restrict", a_addCourseRestrictGroup);
+app.put(
+  "/university/:uni_id/restrict/:cr_restgrp_id",
+  a_editCourseRestrictGroup
+);
+app.delete(
+  "/university/:uni_id/restrict/:cr_restgrp_id",
+  a_removeCourseRestrictGroup
+);
 app.get(
   "/university/:uni_id/restrict/:cr_restgrp_id",
   getCourseRestrictGroupData

@@ -5,6 +5,9 @@ async function getCourseRestrictGroups(req, res) {
   try {
     const user = await getUserFromToken(req);
     const { uni_id } = req.params;
+    let { cr_id = -1 } = req.query;
+    cr_id = cr_id == "" ? -1 : cr_id;
+
     if (user != null) {
       const result = await db.query(
         `SELECT
@@ -33,8 +36,10 @@ async function getCourseRestrictGroups(req, res) {
             JOIN courseset_detail ON courseset_restrictgrp.cr_id = courseset_detail.cr_id 
             AND courseset_restrictgrp.uni_id = courseset_detail.uni_id
         WHERE 
-            courseset_restrictgrp.uni_id = $1;`,
-        [uni_id]
+            courseset_restrictgrp.uni_id = $1${
+              cr_id != -1 ? " AND courseset_restrictgrp.cr_id = $2" : ""
+            };`,
+        cr_id != -1 ? [uni_id, cr_id] : [uni_id]
       );
 
       res.json({
@@ -117,6 +122,136 @@ async function getCourseRestrictGroupData(req, res) {
   } catch (err) {
     console.error(err);
     res.status(404).send("Courseset Restriction Not Found");
+  }
+}
+
+async function a_addCourseRestrictGroup(req, res) {
+  try {
+    const user = await getUserFromToken(req);
+    const { uni_id } = req.params;
+    const { cr_id, name_en, name_th, std_year, term } = req.body;
+
+    if (user != null) {
+      // You might want to add authorization checks here
+      // to ensure the user has the right to add restriction groups
+
+      const insertResult = await db.query(
+        `INSERT INTO courseset_restrictgrp (uni_id, cr_id, name_en, name_th, std_year, term) 
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING cr_restgrp_id;`,
+        [uni_id, cr_id, name_en, name_th, std_year, term]
+      );
+
+      if (insertResult.rowCount > 0) {
+        res.status(201).json({
+          success: true,
+          message: "Course restriction group added successfully",
+          cr_restgrp_id: insertResult.rows[0].cr_restgrp_id, // Return the newly created ID
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Failed to add course restriction group",
+        });
+      }
+    } else {
+      throw new Error("User not authenticated");
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add course restriction group",
+    });
+  }
+}
+
+async function a_editCourseRestrictGroup(req, res) {
+  try {
+    const user = await getUserFromToken(req);
+    const { uni_id, cr_restgrp_id } = req.params;
+    const { name_en, name_th, std_year, term } = req.body;
+
+    if (user != null) {
+      // Authorization checks here
+
+      const updateResult = await db.query(
+        `UPDATE courseset_restrictgrp 
+           SET name_en = $1, name_th = $2, std_year = $3, term = $4 
+           WHERE uni_id = $5 AND cr_restgrp_id = $6;`,
+        [name_en, name_th, std_year, term, uni_id, cr_restgrp_id]
+      );
+
+      if (updateResult.rowCount > 0) {
+        res.status(200).json({
+          success: true,
+          message: "Course restriction group updated successfully",
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: "Course restriction group not found",
+        });
+      }
+    } else {
+      throw new Error("User not authenticated");
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update course restriction group",
+    });
+  }
+}
+
+async function a_removeCourseRestrictGroup(req, res) {
+  try {
+    const user = await getUserFromToken(req);
+    const { uni_id, cr_restgrp_id } = req.params;
+
+    if (user != null) {
+      // Authorization checks here
+
+      await db.query("BEGIN"); // Start a transaction
+
+      // Delete related users and subjects first
+      await db.query("DELETE FROM restrictgrp_user WHERE cr_restgrp_id = $1", [
+        cr_restgrp_id,
+      ]);
+      await db.query(
+        "DELETE FROM restrictgrp_subject WHERE cr_restgrp_id = $1",
+        [cr_restgrp_id]
+      );
+
+      // Delete the restriction group
+      const deleteResult = await db.query(
+        "DELETE FROM courseset_restrictgrp WHERE uni_id = $1 AND cr_restgrp_id = $2",
+        [uni_id, cr_restgrp_id]
+      );
+
+      await db.query("COMMIT"); // Commit the transaction
+
+      if (deleteResult.rowCount > 0) {
+        res.status(200).json({
+          success: true,
+          message: "Course restriction group removed successfully",
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          message: "Course restriction group not found",
+        });
+      }
+    } else {
+      throw new Error("User not authenticated");
+    }
+  } catch (err) {
+    console.error(err);
+    await db.query("ROLLBACK"); // Rollback on error
+    res.status(500).json({
+      success: false,
+      message: "Failed to remove course restriction group",
+    });
   }
 }
 
@@ -294,7 +429,7 @@ async function a_addCourseRestrictGroupSubjects(req, res) {
 
         // Assuming your subject object has suj_id and sec properties
         await db.query(
-          `INSERT INTO restrictgrp_subject (cr_restgrp_id, suj_id, sec) 
+          `INSERT INTO restrictgrp_subject (cr_restgrp_id, suj_id, sec)
              VALUES ($1, $2, $3);`, // Prevent duplicates
           [cr_restgrp_id, subject.suj_id, subject.sec]
         );
@@ -423,6 +558,9 @@ async function a_updateCourseRestrictGroupSubjects(req, res) {
 module.exports = {
   getCourseRestrictGroups,
   getCourseRestrictGroupData,
+  a_addCourseRestrictGroup,
+  a_editCourseRestrictGroup,
+  a_removeCourseRestrictGroup,
   a_addCourseRestrictGroupUsers,
   a_removeCourseRestrictGroupUsers,
   a_updateCourseRestrictGroupUsers,
