@@ -82,6 +82,10 @@ const {
   a_editCourseRestrictGroup,
   a_removeCourseRestrictGroup,
 } = require("./routes/restricted-group");
+const {
+  getRegisterIntevals,
+  a_manageRegisterYear,
+} = require("./routes/register");
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json({ limit: "6mb" }));
@@ -247,6 +251,12 @@ app.put(
   "/university/:uni_id/restrict/:cr_restgrp_id/subject",
   a_updateCourseRestrictGroupSubjects
 );
+
+// university register intervals
+app.get("/university/:uni_id/register", getRegisterIntevals);
+app.post("/university/:uni_id/register/year", a_manageRegisterYear);
+app.put("/university/:uni_id/register/year/:oldYear", a_manageRegisterYear);
+app.delete("/university/:uni_id/register/year/:oldYear", a_manageRegisterYear);
 
 /** end admin section */
 
