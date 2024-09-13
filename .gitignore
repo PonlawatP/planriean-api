@@ -27,3 +27,5 @@ node_modules*
 .env*
 .env
 /node_modules
+/services/build
+/services/dist
