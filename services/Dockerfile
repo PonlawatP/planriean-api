@@ -1,5 +1,5 @@
 # First stage: Build the executable with PyInstaller
-FROM python:3.9-slim as builder
+FROM python:3.9-slim AS builder
 
 # Install necessary build dependencies for PyInstaller
 RUN apt-get update && apt-get install -y \

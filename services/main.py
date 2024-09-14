@@ -32,13 +32,14 @@ def getUniverselData():
     uni_key = config['scrap'].get('university')
     query = 'select uni_id from university_detail where LOWER(uni_key) = LOWER(%s);'
     cur.execute(query, (uni_key,))
-    rows = cur.fetchall()
+    pre_rows = cur.fetchall()
     con.commit()
+    out_of_round = False
     # con.close()
 
-    if len(rows) == 1:
+    if len(pre_rows) == 1:
         q = 'SELECT uni_id, year, seamster_round, ss_round, std_year, ss_start, ss_end from seamster_detail LEFT JOIN seamster_rounding ON seamster_detail.seamster_id = seamster_rounding.seamster_id WHERE uni_id = %s AND CURRENT_DATE <= ss_end ORDER BY ss_start;'
-        cur.execute(q, (rows[0],))
+        cur.execute(q, (pre_rows[0],))
         rows = cur.fetchall()
         con.commit()
 
@@ -50,24 +51,77 @@ def getUniverselData():
             collegian_year = rows[0][4]
             start_date = rows[0][5]
             end_date = rows[0][6]
+        else:
+            out_of_round = True
+            q = '''SELECT
+                    uni_id,
+                    YEAR,
+                    seamster_round,
+                    ss_round,
+                    std_year,
+                    ss_start,
+                    ss_end 
+                FROM
+                    seamster_detail
+                    LEFT JOIN seamster_rounding ON seamster_detail.seamster_id = seamster_rounding.seamster_id 
+                WHERE
+                    uni_id = %s
+                    AND ss_end is not null
+                ORDER BY
+                    ss_end DESC
+                LIMIT 1;'''
 
+            cur.execute(q, (pre_rows[0],))
+            rows = cur.fetchall()
+            con.commit()
+
+            # ถ้ามีวันที่โชว์
+            if len(rows) >= 1:
+                year = rows[0][1]
+                semaster = rows[0][2]
+                round = rows[0][3]
+                collegian_year = rows[0][4]
+                start_date = rows[0][5]
+                end_date = rows[0][6]
+            else:
+                year = 0
+                semaster = 0
+                round = 0
+                collegian_year = 0
+                start_date = 0
+                end_date = 0
             # print(start_date, today < start_date,end_date, today <= end_date, start_date == today, not (today < start_date and today <= end_date))
 
         # for row in rows:
         #     print(row)
-    return {
-        "collapsed": not (date.today() < start_date and date.today() <= end_date),
-        "first_day": start_date == date.today(),
-        "time": date.today(),
-        "data": {
-            "year": year,
-            "semaster": semaster,
-            "round": round,
-            "collegian_year": collegian_year,
-            "start_date": start_date,
-            "end_date": end_date
+    if out_of_round:
+        return {
+            "collapsed": False,
+            "first_day": False,
+            "time": date.today(),
+            "data": {
+                "year": year,
+                "semaster": semaster,
+                "round": round,
+                "collegian_year": collegian_year,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
         }
-    }
+    else:
+        return {
+            "collapsed": date.today() >= start_date or date.today() > end_date,
+            "first_day": start_date == date.today(),
+            "time": date.today(),
+            "data": {
+                "year": year,
+                "semaster": semaster,
+                "round": round,
+                "collegian_year": collegian_year,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+        }
 
 
 def getInput(state='m'):
@@ -209,7 +263,9 @@ if __name__ == '__main__':
             # ดึงข้อมูลที่เกี่ยวกับช่วงวันที่ลงทะเบียนมาเช็คก่อน
             r = getUniverselData()
             # print(r)
-            print(f'  Time Checking ({r["time"]})...\n')
+            print(f'  Time Checking ({r["time"]})...')
+            # print(r['data']['year'],r['data']['semaster'])
+            print(f'  Current Semester: {r["data"]["year"]} [{r["data"]["semaster"]}]\n')
             if r['collapsed'] == True and isRegisScrapRunning == False:
                 print("\t== In-Registration Event Detected ==\n")
                 # ถ้าเข้า gap ลงทะเบียน => 5 วิโหลดข้อมูล
