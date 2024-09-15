@@ -330,6 +330,20 @@ async function a_manageRegisterTimeline(req, res) {
       }
 
       if (req.method === "POST") {
+        // Check if the year already exists
+        const existsResult = await db.query(
+          "SELECT 1 FROM seamster_rounding WHERE ss_round = $1 AND seamster_id = (SELECT seamster_id FROM seamster_detail WHERE uni_id = $2 AND year = $3 AND seamster_round = $4)",
+          [ss_round, uni_id, year, semester]
+        );
+
+        if (existsResult.rows.length > 0) {
+          return res.json({
+            success: false,
+            message:
+              "Timeline in this semester has already exists for this university.",
+          });
+        }
+
         // Add new semester data
         const insertResult = await db.query(
           `INSERT INTO seamster_rounding (seamster_id, ss_round, std_year, ss_start, ss_end)
@@ -354,6 +368,20 @@ async function a_manageRegisterTimeline(req, res) {
         // Edit existing semester data
         const { oldTimeline } = req.params; // Get the old semester round from the URL
 
+        // Check if the year already exists
+        const existsResult = await db.query(
+          "SELECT 1 FROM seamster_rounding WHERE ss_round = $1 AND seamster_id = (SELECT seamster_id FROM seamster_detail WHERE uni_id = $2 AND year = $3 AND seamster_round = $4)",
+          [ss_round, uni_id, year, semester]
+        );
+
+        if (existsResult.rows.length > 0) {
+          return res.json({
+            success: false,
+            message:
+              "Timeline in this semester has already exists for this university.",
+          });
+        }
+
         // Update the semester data in the database
         const updateResult = await db.query(
           `UPDATE seamster_rounding
@@ -377,6 +405,19 @@ async function a_manageRegisterTimeline(req, res) {
       } else if (req.method === "DELETE") {
         // Remove existing semester data
         const { timeline } = req.params; // Get the old semester round from the URL
+
+        // Check if the year already exists
+        const existsResult = await db.query(
+          "SELECT 1 FROM seamster_rounding WHERE ss_round = $1 AND seamster_id = (SELECT seamster_id FROM seamster_detail WHERE uni_id = $2 AND year = $3 AND seamster_round = $4)",
+          [timeline, uni_id, year, semester]
+        );
+
+        if (existsResult.rows.length == 0) {
+          return res.json({
+            success: false,
+            message: "Not found Timeline in this semester.",
+          });
+        }
 
         // Delete the semester data from the database
         const deleteResult = await db.query(
@@ -424,6 +465,20 @@ async function a_manageRegisterSubTimeline(req, res) {
       }
 
       if (req.method === "POST") {
+        // Check if the year already exists
+        const existsResult = await db.query(
+          "SELECT 1 FROM seamster_rounding WHERE ss_round = $1 AND seamster_id = (SELECT seamster_id FROM seamster_detail WHERE uni_id = $2 AND year = $3 AND seamster_round = $4) AND std_year = $5",
+          [ss_round, uni_id, year, semester, std_year]
+        );
+
+        if (existsResult.rows.length > 0) {
+          return res.json({
+            success: false,
+            message:
+              "Sub-Timeline in this semester has already exists for this university.",
+          });
+        }
+
         // Add new semester data
         const insertResult = await db.query(
           `INSERT INTO seamster_rounding (seamster_id, ss_round, std_year, ss_start, ss_end)
@@ -447,6 +502,19 @@ async function a_manageRegisterSubTimeline(req, res) {
       } else if (req.method === "PUT") {
         // Edit existing semester data
         const { oldSub, timeline } = req.params; // Get the old semester round from the URL
+
+        // Check if the year already exists
+        const existsResult = await db.query(
+          "SELECT 1 FROM seamster_rounding WHERE ss_round = $1 AND seamster_id = (SELECT seamster_id FROM seamster_detail WHERE uni_id = $2 AND year = $3 AND seamster_round = $4) AND std_year = $5",
+          [timeline, uni_id, year, semester, oldSub]
+        );
+
+        if (existsResult.rows.length == 0) {
+          return res.json({
+            success: false,
+            message: "Sub-Timeline not found in this semester.",
+          });
+        }
 
         // Update the semester data in the database
         const updateResult = await db.query(
@@ -485,6 +553,19 @@ async function a_manageRegisterSubTimeline(req, res) {
       } else if (req.method === "DELETE") {
         // Remove existing semester data
         const { timeline, sub } = req.params; // Get the old semester round from the URL
+
+        // Check if the year already exists
+        const existsResult = await db.query(
+          "SELECT 1 FROM seamster_rounding WHERE ss_round = $1 AND seamster_id = (SELECT seamster_id FROM seamster_detail WHERE uni_id = $2 AND year = $3 AND seamster_round = $4) AND std_year = $5",
+          [timeline, uni_id, year, semester, sub]
+        );
+
+        if (existsResult.rows.length == 0) {
+          return res.json({
+            success: false,
+            message: "Sub-Timeline not found in this semester.",
+          });
+        }
 
         // Delete the semester data from the database
         const deleteResult = await db.query(
