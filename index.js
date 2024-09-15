@@ -85,6 +85,9 @@ const {
 const {
   getRegisterIntevals,
   a_manageRegisterYear,
+  a_manageRegisterSubTimeline,
+  a_manageRegisterTimeline,
+  a_manageRegisterSemester,
 } = require("./routes/register");
 app.use(express.json());
 app.use(cors());
@@ -252,11 +255,51 @@ app.put(
   a_updateCourseRestrictGroupSubjects
 );
 
-// university register intervals
+// get university register intervals
 app.get("/university/:uni_id/register", getRegisterIntevals);
+// university register intervals - year
 app.post("/university/:uni_id/register/year", a_manageRegisterYear);
 app.put("/university/:uni_id/register/year/:oldYear", a_manageRegisterYear);
 app.delete("/university/:uni_id/register/year/:oldYear", a_manageRegisterYear);
+// university register intervals - semester
+app.post(
+  "/university/:uni_id/register/year/:year/semester",
+  a_manageRegisterSemester
+);
+app.put(
+  "/university/:uni_id/register/year/:year/semester/:oldSemester",
+  a_manageRegisterSemester
+);
+app.delete(
+  "/university/:uni_id/register/year/:year/semester/:semester",
+  a_manageRegisterSemester
+);
+// university register intervals - timeline
+app.post(
+  "/university/:uni_id/register/year/:year/semester/:semester/timeline",
+  a_manageRegisterTimeline
+);
+app.put(
+  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:oldTimeline",
+  a_manageRegisterTimeline
+);
+app.delete(
+  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline",
+  a_manageRegisterTimeline
+);
+// university register intervals - sub-timeline
+app.post(
+  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub",
+  a_manageRegisterSubTimeline
+);
+app.put(
+  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:oldSub",
+  a_manageRegisterSubTimeline
+);
+app.delete(
+  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:sub",
+  a_manageRegisterSubTimeline
+);
 
 /** end admin section */
 
