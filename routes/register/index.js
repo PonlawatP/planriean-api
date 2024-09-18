@@ -23,8 +23,6 @@ async function getRegisterIntevals(req, res) {
         [uni_id]
       );
 
-      console.log(result.rows);
-
       let groupedData = result.rows.reduce((acc, curr) => {
         let existingYear = acc.find((item) => item.year === curr.year);
         if (!existingYear) {
@@ -163,7 +161,7 @@ async function a_manageRegisterYear(req, res) {
 
         // Check if the year to update exists
         const yearExistsResult = await db.query(
-          "SELECT 1 FROM seamster_detail WHERE uni_id = $1 AND year = $2",
+          "SELECT seamster_id FROM seamster_detail WHERE uni_id = $1 AND year = $2",
           [uni_id, oldYear]
         );
 
@@ -175,6 +173,14 @@ async function a_manageRegisterYear(req, res) {
         }
 
         // Update the year in the database
+        const row = yearExistsResult.rows;
+        for (let index = 0; index < row.length; index++) {
+          const element = row[index];
+          await db.query(
+            "DELETE FROM seamster_rounding WHERE seamster_id = $1",
+            [element.seamster_id]
+          );
+        }
         await db.query(
           "DELETE FROM seamster_detail WHERE uni_id = $1 AND year = $2",
           [uni_id, oldYear]
@@ -284,10 +290,10 @@ async function a_manageRegisterSemester(req, res) {
         }
 
         // Update the year in the database
-        await db.query("DELETE FROM seamster_detail WHERE seamster_id = $1", [
+        await db.query("DELETE FROM seamster_rounding WHERE seamster_id = $1", [
           yearExistsResult.rows[0].seamster_id,
         ]);
-        await db.query("DELETE FROM seamster_rounding WHERE seamster_id = $1", [
+        await db.query("DELETE FROM seamster_detail WHERE seamster_id = $1", [
           yearExistsResult.rows[0].seamster_id,
         ]);
 
@@ -356,11 +362,13 @@ async function a_manageRegisterTimeline(req, res) {
 
         if (insertResult.rows.length === 0) {
           return res.status(404).json({
-            error: "Semester not found for this university and year.",
+            success: false,
+            message: "Semester not found for this university and year.",
           });
         }
 
         return res.status(201).json({
+          success: true,
           message: "Semester data added successfully.",
           data: insertResult.rows[0],
         });
@@ -395,10 +403,14 @@ async function a_manageRegisterTimeline(req, res) {
         );
 
         if (updateResult.rows.length === 0) {
-          return res.status(404).json({ error: "Semester data not found." });
+          return res.status(404).json({
+            success: false,
+            message: "Semester data not found.",
+          });
         }
 
         return res.json({
+          success: true,
           message: "Semester data updated successfully.",
           data: updateResult.rows[0],
         });
@@ -430,24 +442,35 @@ async function a_manageRegisterTimeline(req, res) {
         );
 
         if (deleteResult.rows.length === 0) {
-          return res.status(404).json({ error: "Semester data not found." });
+          return res.status(404).json({
+            success: false,
+            message: "Semester data not found.",
+          });
         }
 
         return res.json({
+          success: true,
           message: "Semester data deleted successfully.",
           data: deleteResult.rows[0], // Optionally return the deleted data
         });
       } else {
-        return res.status(405).json({ error: "Method not allowed." });
+        return res.status(405).json({
+          success: CSSFontFeatureValuesRule,
+          message: "Method not allowed.",
+        });
       }
     } else {
-      return res.status(401).json({ error: "Unauthorized." });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized.",
+      });
     }
   } catch (err) {
     console.error(err);
-    return res
-      .status(500)
-      .json({ error: "Failed to manage register semester data." });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to manage register semester data.",
+    });
   }
 }
 
@@ -491,11 +514,13 @@ async function a_manageRegisterSubTimeline(req, res) {
 
         if (insertResult.rows.length === 0) {
           return res.status(404).json({
-            error: "Semester not found for this university and year.",
+            success: false,
+            message: "Semester not found for this university and year.",
           });
         }
 
         return res.status(201).json({
+          success: true,
           message: "Semester data added successfully.",
           data: insertResult.rows[0],
         });
@@ -543,10 +568,14 @@ async function a_manageRegisterSubTimeline(req, res) {
         );
 
         if (updateResult.rows.length === 0) {
-          return res.status(404).json({ error: "Semester data not found." });
+          return res.status(404).json({
+            success: false,
+            message: "Semester data not found.",
+          });
         }
 
         return res.json({
+          success: true,
           message: "Semester data updated successfully.",
           data: updateResult.rows[0],
         });
@@ -578,18 +607,28 @@ async function a_manageRegisterSubTimeline(req, res) {
         );
 
         if (deleteResult.rows.length === 0) {
-          return res.status(404).json({ error: "Semester data not found." });
+          return res.status(404).json({
+            success: false,
+            message: "Semester data not found.",
+          });
         }
 
         return res.json({
+          success: true,
           message: "Semester data deleted successfully.",
           data: deleteResult.rows[0], // Optionally return the deleted data
         });
       } else {
-        return res.status(405).json({ error: "Method not allowed." });
+        return res.status(405).json({
+          success: false,
+          message: "Method not allowed.",
+        });
       }
     } else {
-      return res.status(401).json({ error: "Unauthorized." });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized.",
+      });
     }
   } catch (err) {
     console.error(err);
