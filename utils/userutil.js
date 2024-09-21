@@ -12,10 +12,11 @@ async function getUser(username, show_passwd = false) {
       return null;
     }
 
-    const ress = show_passwd
-      ? result.rows[0]
-      : { ...result.rows[0], password: undefined };
-    return ress;
+    const roles = await getUserRoles(result.rows[0]);
+
+    return show_passwd
+      ? { ...result.rows[0], roles }
+      : { ...result.rows[0], password: undefined, roles };
   } catch (err) {
     return null;
   }
@@ -38,9 +39,11 @@ async function getUserFromToken(req, show_passwd = false) {
       return null;
     }
 
+    const roles = await getUserRoles(result.rows[0]);
+
     return show_passwd
-      ? result.rows[0]
-      : { ...result.rows[0], password: undefined };
+      ? { ...result.rows[0], roles }
+      : { ...result.rows[0], password: undefined, roles };
   } catch (err) {
     return null;
   }
@@ -54,11 +57,11 @@ async function getUserFromUID(uid, show_passwd = false) {
     if (result.rows.length == 0) {
       return null;
     }
+    const roles = await getUserRoles(result.rows[0]);
 
-    const ress = show_passwd
-      ? result.rows[0]
-      : { ...result.rows[0], password: undefined };
-    return ress;
+    return show_passwd
+      ? { ...result.rows[0], roles }
+      : { ...result.rows[0], password: undefined, roles };
   } catch (err) {
     return null;
   }
@@ -105,14 +108,12 @@ async function getUserRoles(user) {
         [sts.major_id]
       );
 
-      res.push([
-        {
-          role: sts.role,
-          university: sts.uni_id != null ? { ...uni_res.rows[0] } : null,
-          faculty: sts.fac_id != null ? { ...fac_res.rows[0] } : null,
-          major: sts.major_id != null ? { ...courseset_res.rows[0] } : null,
-        },
-      ]);
+      res.push({
+        role: sts.role,
+        university: sts.uni_id != null ? { ...uni_res.rows[0] } : null,
+        faculty: sts.fac_id != null ? { ...fac_res.rows[0] } : null,
+        major: sts.major_id != null ? { ...courseset_res.rows[0] } : null,
+      });
     }
     return res;
   } catch (err) {

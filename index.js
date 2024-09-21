@@ -89,7 +89,12 @@ const {
   a_manageRegisterTimeline,
   a_manageRegisterSemester,
 } = require("./routes/register");
-const { getAllUsers } = require("./routes/users");
+const {
+  getAllUsers,
+  a_addUserRole,
+  a_deleteUserRole,
+  a_editUserRole,
+} = require("./routes/users");
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json({ limit: "6mb" }));
@@ -134,9 +139,13 @@ app.get("/university/:uni_id/season", getUniversitySeasons);
 /** admin section */
 // users
 app.get("/university/:uni_id/user", requireJWTAuth, getAllUsers);
-app.get("/university/:uni_id/user/helper", requireJWTAuth, getAllUsers);
-app.get("/university/:uni_id/user/moderator", requireJWTAuth, getAllUsers);
-app.get("/university/:uni_id/user/admin", requireJWTAuth, getAllUsers);
+app.post("/university/:param_uni_id/user/:uid", requireJWTAuth, a_addUserRole);
+app.put("/university/:param_uni_id/user/:uid", requireJWTAuth, a_editUserRole);
+app.delete(
+  "/university/:param_uni_id/user/:uid",
+  requireJWTAuth,
+  a_deleteUserRole
+);
 // university
 app.post("/university", requireJWTAuth, addUniversityDetail);
 app.put("/university/:uni_id", requireJWTAuth, editUniversityDetail);
