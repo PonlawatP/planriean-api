@@ -38,10 +38,9 @@ async function getUserFromToken(req, show_passwd = false) {
       return null;
     }
 
-    const ress = show_passwd
+    return show_passwd
       ? result.rows[0]
       : { ...result.rows[0], password: undefined };
-    return ress;
   } catch (err) {
     return null;
   }
@@ -64,38 +63,73 @@ async function getUserFromUID(uid, show_passwd = false) {
     return null;
   }
 }
-async function getUserRole(user_data) {
+async function getUserRoles(user) {
   try {
     let result = await db.query(
       "SELECT * FROM user_additionrole WHERE uid = $1",
       [user.uid]
     );
 
+    const uni_res = await db.query(
+      "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
+      [user.uni_id]
+    );
+
     if (result.rows.length == 0) {
-      return {
-        role: "user",
-        uni_id: user.uni_id,
-        fac_id: null,
-        major_id: null,
-      };
+      return [
+        {
+          role: "user",
+          university: user.uni_id != null ? { ...uni_res.rows[0] } : null,
+          faculty: null,
+          major: null,
+        },
+      ];
     }
 
-    const sts = result.rows[0];
+    const res = [];
+    for (let index = 0; index < result.rows.length; index++) {
+      const sts = result.rows[index];
 
-    const ress = {
-      role: sts.role,
-      uni_id: sts.uni_id,
-      fac_id: sts.fac_id,
-      major_id: sts.major_id,
-    };
-    return ress;
+      const fac_res = await db.query(
+        "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
+        [sts.uni_id, sts.fac_id]
+      );
+
+      // const maj_res = await db.query(
+      //   "SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3",
+      //   [user.uni_id, user.fac_id, user.major_id]
+      // );
+
+      const courseset_res = await db.query(
+        "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+        [sts.major_id]
+      );
+
+      res.push([
+        {
+          role: sts.role,
+          university: sts.uni_id != null ? { ...uni_res.rows[0] } : null,
+          faculty: sts.fac_id != null ? { ...fac_res.rows[0] } : null,
+          major: sts.major_id != null ? { ...courseset_res.rows[0] } : null,
+        },
+      ]);
+    }
+    return res;
   } catch (err) {
-    return {
-      role: "user",
-      uni_id: user.uni_id,
-      fac_id: null,
-      major_id: null,
-    };
+    console.log(err);
+
+    const uni_res = await db.query(
+      "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
+      [user.uni_id]
+    );
+    return [
+      {
+        role: "user",
+        university: user.uni_id != null ? { ...uni_res.rows[0] } : null,
+        faculty: null,
+        major: null,
+      },
+    ];
   }
 }
 
@@ -115,6 +149,155 @@ async function checkEmail(user) {
   return result.rowCount == 0;
 }
 
+async function getUsers(
+  uni_id = 0,
+  page = 1,
+  limit = 25,
+  search = "",
+  role = ""
+) {
+  const offset = (page - 1) * limit;
+
+  // Prepare the search condition
+  const searchCondition = search
+    ? `
+    WHERE (
+      ud.username ILIKE $1 OR
+      ud.std_id ILIKE $1 OR
+      ud.std_name ILIKE $1 OR
+      ud.std_surname ILIKE $1 OR
+      ud.phone ILIKE $1 OR
+      ud.email ILIKE $1 OR
+      ud.auth_reg_username ILIKE $1
+    ) ${uni_id != 0 ? `AND ud.uni_id = $2` : ""} ${
+        role ? `AND COALESCE(r.role, 'user') ILIKE $3` : ""
+      }
+  `
+    : uni_id != 0
+    ? `WHERE ud.uni_id = $1 ${
+        role ? `AND COALESCE(r.role, 'user') ILIKE $2` : ""
+      }`
+    : `${role ? `WHERE COALESCE(r.role, 'user') ILIKE $1` : ""}`;
+
+  // Query to get the total count of users
+  const totalCountResult = await db.query(
+    `SELECT CAST(COUNT(ud.*) AS INT) AS total FROM user_detail ud
+     ${
+       role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
+     } ${searchCondition}`,
+    search
+      ? uni_id != 0
+        ? role
+          ? [`%${search}%`, uni_id, role]
+          : [`%${search}%`, uni_id]
+        : [`%${search}%`]
+      : uni_id != 0
+      ? role
+        ? [uni_id, role]
+        : [uni_id]
+      : role
+      ? [role]
+      : []
+  );
+
+  const totalCount = totalCountResult.rows[0].total;
+  const last_page = Math.ceil(totalCount / limit);
+
+  // Query to get the paginated users
+  const result = await db.query(
+    `SELECT ud.*${role ? ", COALESCE(r.role, 'user') AS match_role " : " "}
+     FROM user_detail ud
+     ${
+       role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
+     } ${searchCondition} ${
+      search
+        ? uni_id != 0
+          ? role
+            ? "LIMIT $4 OFFSET $5"
+            : "LIMIT $3 OFFSET $4"
+          : role
+          ? "LIMIT $3 OFFSET $4"
+          : "LIMIT $2 OFFSET $3"
+        : uni_id != 0
+        ? role
+          ? "LIMIT $3 OFFSET $4"
+          : "LIMIT $2 OFFSET $3"
+        : role
+        ? "LIMIT $2 OFFSET $3"
+        : "LIMIT $1 OFFSET $2"
+    }`,
+    search
+      ? uni_id != 0
+        ? role
+          ? [`%${search}%`, uni_id, role, limit, offset]
+          : [`%${search}%`, uni_id, limit, offset]
+        : role
+        ? [`%${search}%`, role, limit, offset]
+        : [`%${search}%`, limit, offset]
+      : uni_id != 0
+      ? role
+        ? [uni_id, role, limit, offset]
+        : [uni_id, limit, offset]
+      : role
+      ? [role, limit, offset]
+      : [limit, offset]
+  );
+
+  const res = [];
+  for (let index = 0; index < result.rowCount; index++) {
+    const user = result.rows[index];
+    const user_roles = await getUserRoles(user);
+    const uni_res = await db.query(
+      "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
+      [user.uni_id]
+    );
+
+    const fac_res = await db.query(
+      "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
+      [user.uni_id, user.fac_id]
+    );
+
+    const maj_res = await db.query(
+      "SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3",
+      [user.uni_id, user.fac_id, user.major_id]
+    );
+
+    const courseset_res = await db.query(
+      "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+      [user.cr_id]
+    );
+
+    res.push({
+      ...user,
+      password: undefined,
+      match_role: undefined,
+      uni_id: undefined,
+      fac_id: undefined,
+      major_id: undefined,
+      cr_id: undefined,
+      roles: user_roles,
+      study_status: {
+        university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
+        faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },
+        major: maj_res.rowCount == 0 ? null : { ...maj_res.rows[0] },
+        courseset:
+          courseset_res.rowCount == 0 ? null : { ...courseset_res.rows[0] },
+      },
+    });
+  }
+
+  return {
+    pagination: {
+      totalItem: totalCount,
+      totalPage: last_page,
+      page,
+      limit,
+      offset,
+    },
+    users: res,
+  };
+}
+
 async function getUserFromUsername(user) {
   const result = await db.query(
     "SELECT * FROM user_detail WHERE lower(username) = lower($1) OR lower(email) = lower($2)",
@@ -124,29 +307,36 @@ async function getUserFromUsername(user) {
     let user_nopass = { ...result.rows[0], password: undefined };
 
     const uni_res = await db.query(
-      "SELECT * FROM university_detail WHERE uni_id = $1",
+      "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
       [user_nopass.uni_id]
     );
+
     const fac_res = await db.query(
-      "SELECT * FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
+      "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
       [user_nopass.uni_id, user_nopass.fac_id]
     );
+
     const maj_res = await db.query(
       "SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3",
       [user_nopass.uni_id, user_nopass.fac_id, user_nopass.major_id]
     );
+
     const courseset_res = await db.query(
-      "SELECT * FROM courseset_detail WHERE cr_id = $1",
+      "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user_nopass.cr_id]
     );
 
+    const user_roles = await getUserRoles(user_nopass);
+
     return {
       user: {
+        login_with: "username",
         ...user_nopass,
         uni_id: undefined,
         fac_id: undefined,
         major_id: undefined,
         cr_id: undefined,
+        roles: user_roles,
         study_status: {
           university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
           faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },
@@ -168,29 +358,36 @@ async function getUserFromGoogle(email) {
     let user_nopass = { ...result.rows[0], password: undefined };
 
     const uni_res = await db.query(
-      "SELECT * FROM university_detail WHERE uni_id = $1",
+      "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
       [user_nopass.uni_id]
     );
+
     const fac_res = await db.query(
-      "SELECT * FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
+      "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
       [user_nopass.uni_id, user_nopass.fac_id]
     );
+
     const maj_res = await db.query(
       "SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3",
       [user_nopass.uni_id, user_nopass.fac_id, user_nopass.major_id]
     );
+
     const courseset_res = await db.query(
-      "SELECT * FROM courseset_detail WHERE cr_id = $1",
+      "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user_nopass.cr_id]
     );
 
+    const user_roles = await getUserRoles(user_nopass);
+
     return {
       user: {
+        login_with: "google",
         ...user_nopass,
         uni_id: undefined,
         fac_id: undefined,
         major_id: undefined,
         cr_id: undefined,
+        roles: user_roles,
         study_status: {
           university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
           faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },
@@ -212,10 +409,11 @@ const encryptPassword = async (password = "") => {
 };
 
 module.exports = {
+  getUsers,
   getUser,
   getUserFromToken,
   getUserFromUID,
-  getUserRole,
+  getUserRoles,
   getUserFromGoogle,
   getUserFromUsername,
   checkUsername,
