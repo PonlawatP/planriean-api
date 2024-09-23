@@ -60,7 +60,7 @@ async function a_addUserRole(req, res) {
     const roleIndex = getRoleIndex(role);
 
     if (roleIndex === 1 || roleIndex === 2) {
-      if (!uni_id || (roleIndex === 1 && !fac_id)) {
+      if (uni_id == null || (roleIndex === 1 && fac_id == null)) {
         return res.status(403).json({
           success: false,
           message:
@@ -132,6 +132,8 @@ async function a_editUserRole(req, res) {
     const actLargestRole = getLargestRole(user.roles);
 
     const { old, edit } = req.body;
+    // console.log(old, edit);
+
     // Edit role
     await editUserRole(uid, { old, edit }, actLargestRole, res);
   } catch (err) {
@@ -295,6 +297,7 @@ async function isValidFaculty(uni_id, fac_id) {
 }
 
 async function isValidMajor(uni_id, fac_id, major_id) {
+  //   return true;
   if (major_id == null) {
     return true;
   }

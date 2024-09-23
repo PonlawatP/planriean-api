@@ -13,10 +13,19 @@ async function getUser(username, show_passwd = false) {
     }
 
     const roles = await getUserRoles(result.rows[0]);
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [result.rows[0].uid]
+    );
 
     return show_passwd
-      ? { ...result.rows[0], roles }
-      : { ...result.rows[0], password: undefined, roles };
+      ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
+      : {
+          ...result.rows[0],
+          password: undefined,
+          plan_created: plancount.rows[0].count,
+          roles,
+        };
   } catch (err) {
     return null;
   }
@@ -41,9 +50,19 @@ async function getUserFromToken(req, show_passwd = false) {
 
     const roles = await getUserRoles(result.rows[0]);
 
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [result.rows[0].uid]
+    );
+
     return show_passwd
-      ? { ...result.rows[0], roles }
-      : { ...result.rows[0], password: undefined, roles };
+      ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
+      : {
+          ...result.rows[0],
+          password: undefined,
+          plan_created: plancount.rows[0].count,
+          roles,
+        };
   } catch (err) {
     return null;
   }
@@ -59,9 +78,19 @@ async function getUserFromUID(uid, show_passwd = false) {
     }
     const roles = await getUserRoles(result.rows[0]);
 
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [uid]
+    );
+
     return show_passwd
-      ? { ...result.rows[0], roles }
-      : { ...result.rows[0], password: undefined, roles };
+      ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
+      : {
+          ...result.rows[0],
+          password: undefined,
+          plan_created: plancount.rows[0].count,
+          roles,
+        };
   } catch (err) {
     return null;
   }
@@ -206,7 +235,9 @@ async function getUsers(
 
   // Query to get the paginated users
   const result = await db.query(
-    `SELECT ud.*${role ? ", COALESCE(r.role, 'user') AS match_role " : " "}
+    `SELECT DISTINCT ud.*${
+      role ? ", COALESCE(r.role, 'user') AS match_role " : " "
+    }
      FROM user_detail ud
      ${
        role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
@@ -268,6 +299,11 @@ async function getUsers(
       [user.cr_id]
     );
 
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [user.uid]
+    );
+
     res.push({
       ...user,
       password: undefined,
@@ -277,6 +313,7 @@ async function getUsers(
       major_id: undefined,
       cr_id: undefined,
       roles: user_roles,
+      plan_created: plancount.rows[0].count,
       study_status: {
         university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
         faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },
@@ -326,6 +363,10 @@ async function getUserFromUsername(user) {
       "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user_nopass.cr_id]
     );
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [user_nopass.uid]
+    );
 
     const user_roles = await getUserRoles(user_nopass);
 
@@ -338,6 +379,7 @@ async function getUserFromUsername(user) {
         major_id: undefined,
         cr_id: undefined,
         roles: user_roles,
+        plan_created: plancount.rows[0].count,
         study_status: {
           university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
           faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },
@@ -377,6 +419,10 @@ async function getUserFromGoogle(email) {
       "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user_nopass.cr_id]
     );
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [user_nopass.uid]
+    );
 
     const user_roles = await getUserRoles(user_nopass);
 
@@ -389,6 +435,7 @@ async function getUserFromGoogle(email) {
         major_id: undefined,
         cr_id: undefined,
         roles: user_roles,
+        plan_created: plancount.rows[0].count,
         study_status: {
           university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
           faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },

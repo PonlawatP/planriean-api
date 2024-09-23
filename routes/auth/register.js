@@ -8,6 +8,18 @@ const {
   encryptPassword,
 } = require("../../utils/userutil");
 
+// Sanitize input function
+function sanitizeInput(input) {
+  return input != undefined
+    ? Number.isInteger(input)
+      ? input
+      : input
+          .replace(/<script.*?>.*?<\/script>/gi, "")
+          .replace(/<\/?[^>]+(>|$)/g, "")
+          .trim()
+    : undefined;
+}
+
 async function registerUser(req, res) {
   try {
     const today = new Date();
@@ -35,31 +47,49 @@ async function registerUser(req, res) {
       auth_reg_username,
       std_start_year,
     } = req.body;
-    const hashedPass = await encryptPassword(password);
+
+    // Sanitize inputs
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = password; // Hashing will handle security
+    const sanitizedUniId = sanitizeInput(uni_id);
+    const sanitizedFacId = sanitizeInput(fac_id);
+    const sanitizedMajorId = sanitizeInput(major_id);
+    const sanitizedStdId = sanitizeInput(std_id);
+    const sanitizedCrId = sanitizeInput(cr_id);
+    const sanitizedImage = sanitizeInput(image);
+    const sanitizedStdName = sanitizeInput(std_name);
+    const sanitizedStdSurname = sanitizeInput(std_surname);
+    const sanitizedPhone = sanitizeInput(phone);
+    const sanitizedEmail = sanitizeInput(email);
+    const sanitizedAuthRegUsername = sanitizeInput(auth_reg_username);
+    const sanitizedStdStartYear = sanitizeInput(std_start_year);
+
+    const hashedPass = await encryptPassword(sanitizedPassword);
     await db.query(
       `INSERT INTO "public"."user_detail" ("username", "password", "uni_id", "fac_id", "major_id", "std_id", "cr_id", "image", "std_name", "std_surname", "phone", "email", "auth_reg_username", "create_at", "std_start_year") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);`,
       [
-        username,
+        sanitizedUsername,
         hashedPass,
-        uni_id,
-        fac_id,
-        major_id,
-        std_id,
-        cr_id,
-        image,
-        std_name,
-        std_surname,
-        phone,
-        email,
-        auth_reg_username,
+        sanitizedUniId,
+        sanitizedFacId,
+        sanitizedMajorId,
+        sanitizedStdId,
+        sanitizedCrId,
+        sanitizedImage,
+        sanitizedStdName,
+        sanitizedStdSurname,
+        sanitizedPhone,
+        sanitizedEmail,
+        sanitizedAuthRegUsername,
         formatted,
-        std_start_year,
+        sanitizedStdStartYear,
       ]
     );
     res != null ? res.json({ success: true }) : () => {};
     return true;
   } catch (error) {
-    // console.log(error);
+    console.log(error);
+
     res != null
       ? res
           .status(400)
@@ -68,26 +98,35 @@ async function registerUser(req, res) {
     return false;
   }
 }
+
 async function updateFSUser(req, res) {
   try {
     const jwt_dc = jwt.decode(
       req.headers["authorization"],
       process.env.SECRET_JWT
     );
-    // console.log(jwt_dc);
     const { uni_id, fac_id, major_id, std_id, cr_id, std_start_year } =
       req.body;
+
+    // Sanitize inputs
+    const sanitizedUniId = sanitizeInput(uni_id);
+    const sanitizedFacId = sanitizeInput(fac_id);
+    const sanitizedMajorId = sanitizeInput(major_id);
+    const sanitizedStdId = std_id.length == 11 ? sanitizeInput(std_id) : "";
+    const sanitizedCrId = sanitizeInput(cr_id);
+    const sanitizedStdStartYear = sanitizeInput(std_start_year);
+
     await db.query(
       `UPDATE "public"."user_detail" SET "uni_id" = $1, fac_id = $2, "major_id" = $3, "std_id" = $4, "cr_id" = $5, "std_start_year" = $6 WHERE ${
         jwt_dc.email ? "email" : "username"
       } = $7;`,
       [
-        uni_id,
-        fac_id,
-        major_id,
-        std_id.length == 11 ? std_id : "",
-        cr_id,
-        std_start_year,
+        sanitizedUniId,
+        sanitizedFacId,
+        sanitizedMajorId,
+        sanitizedStdId,
+        sanitizedCrId,
+        sanitizedStdStartYear,
         jwt_dc.email ? jwt_dc.email : jwt_dc.user.username,
       ]
     );
@@ -105,6 +144,9 @@ async function updateFSUser(req, res) {
     return false;
   }
 }
+
+// The checkEmailUser and checkUsernameUser functions can also be sanitized similarly if needed.
+
 async function checkEmailUser(req, res) {
   try {
     const { email } = req.body;
@@ -112,7 +154,8 @@ async function checkEmailUser(req, res) {
       res.json(false);
       return false;
     }
-    const e = await checkEmail(email.trim());
+    const sanitizedEmail = sanitizeInput(email.trim());
+    const e = await checkEmail(sanitizedEmail);
 
     res.json(e);
     return e;
@@ -124,6 +167,7 @@ async function checkEmailUser(req, res) {
     return false;
   }
 }
+
 async function checkUsernameUser(req, res) {
   try {
     const { username } = req.body;
@@ -131,7 +175,8 @@ async function checkUsernameUser(req, res) {
       res.json(false);
       return false;
     }
-    const e = await checkUsername(username);
+    const sanitizedUsername = sanitizeInput(username.trim());
+    const e = await checkUsername(sanitizedUsername);
 
     res.json(e);
     return e;
