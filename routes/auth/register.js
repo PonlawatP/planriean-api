@@ -106,7 +106,7 @@ async function updateUser(req, res) {
       req.headers["authorization"],
       process.env.SECRET_JWT
     );
-    const { uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username } = req.body;
+    const { uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username, image } = req.body;
 
     // Sanitize inputs
     const sanitizedUniId = sanitizeInput(uni_id);
@@ -118,6 +118,7 @@ async function updateUser(req, res) {
     const sanitizedStdStartYear = sanitizeInput(std_start_year);
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedUsername = sanitizeInput(username);
+    const sanitizedImage = sanitizeInput(image);
 
     await db.query(
       `UPDATE "public"."user_detail" SET 
@@ -129,8 +130,9 @@ async function updateUser(req, res) {
         "std_surname" = $6, 
         "std_start_year" = $7, 
         "email" = $8, 
-        "username" = $9 
-      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.email ? "email" : "username"} = $10;`,
+        "username" = $9,
+        "image" = $10
+      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.email ? "email" : "username"} = $11;`,
       [
         sanitizedUniId,
         sanitizedFacId,
@@ -141,6 +143,7 @@ async function updateUser(req, res) {
         sanitizedStdStartYear,
         sanitizedEmail,
         sanitizedUsername,
+        sanitizedImage,
         jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.email ? jwt_dc.email : jwt_dc.user.username,
       ]
     );
