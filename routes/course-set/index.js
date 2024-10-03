@@ -105,14 +105,14 @@ async function getCoursesetMapping(req, res) {
           pre_result[year].semesters[term].subjects[subjectIndex] = {
             ...(suj_id.includes("h-")
               ? {
-                  ...headersData.rows.find(
-                    (f) => f.cr_head_id == suj_id.split("h-")[1]
-                  ),
-                }
+                ...headersData.rows.find(
+                  (f) => f.cr_head_id == suj_id.split("h-")[1]
+                ),
+              }
               : {
-                  suj_id: suj_id,
-                  ...subjectsData.rows.find((f) => f.suj_id == suj_id),
-                }),
+                suj_id: suj_id,
+                ...subjectsData.rows.find((f) => f.suj_id == suj_id),
+              }),
             credit: credit,
           };
         });
@@ -339,31 +339,31 @@ async function getSubjectGroups(req, res) {
         groups:
           m.fac_id == 0
             ? templateGE.map((t) => {
-                return {
-                  ...t,
-                  global: false,
-                  startsWith: undefined,
-                  subjects: crs_sujs.rows.filter((s) =>
-                    s.code.startsWith(String(t.startsWith).padStart(2, "0"))
-                  ),
-                };
-              })
+              return {
+                ...t,
+                global: false,
+                startsWith: undefined,
+                subjects: crs_sujs.rows.filter((s) =>
+                  s.code.startsWith(String(t.startsWith).padStart(2, "0"))
+                ),
+              };
+            })
             : [
-                {
-                  global: true,
-                  subjects: crs_sujs.rows.filter((s) =>
-                    s.code.startsWith(String(m.fac_id).padStart(2, "0"))
-                  ),
-                },
-                // {
-                //   header: "หมวดหมู่ที่ 1",
-                //   desc: "ทักษะการเรียนรู้ตลอดชีวิต",
-                //   global: false,
-                //   subjects: crs_sujs.rows.filter((s) =>
-                //     s.code.startsWith(String(m.fac_id).padStart(2, "0"))
-                //   ),
-                // },
-              ],
+              {
+                global: true,
+                subjects: crs_sujs.rows.filter((s) =>
+                  s.code.startsWith(String(m.fac_id).padStart(2, "0"))
+                ),
+              },
+              // {
+              //   header: "หมวดหมู่ที่ 1",
+              //   desc: "ทักษะการเรียนรู้ตลอดชีวิต",
+              //   global: false,
+              //   subjects: crs_sujs.rows.filter((s) =>
+              //     s.code.startsWith(String(m.fac_id).padStart(2, "0"))
+              //   ),
+              // },
+            ],
       };
     });
     // console.log(crs);
@@ -684,6 +684,19 @@ async function a_editCoursesetHeader(req, res) {
       cr_min_credit_ref,
     } = req.body;
 
+    // Check if the courseset header already exists
+    const existingHeader = await db.query(
+      `SELECT * FROM courseset_header WHERE uni_id = $1 AND cr_id = $2 AND cr_head_id = $3`,
+      [uni_id, cr_id, cr_head_id]
+    );
+
+    if (existingHeader.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Courseset Header not found"
+      });
+    }
+
     // Update the courseset header
     const updateResult = await db.query(
       `UPDATE courseset_header SET 
@@ -737,6 +750,19 @@ async function a_addCoursesetSubject(req, res) {
       suj_real_id,
       suj_id,
     } = req.body;
+
+    // Check if the courseset subject already exists
+    const existingSubject = await db.query(
+      `SELECT * FROM courseset_subject WHERE uni_id = $1 AND cr_id = $2 AND suj_id = $3`,
+      [uni_id, cr_id, suj_id]
+    );
+
+    if (existingSubject.rowCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Courseset Subject already exists",
+      });
+    }
 
     // Insert the new courseset subject
     const insertResult = await db.query(
@@ -888,8 +914,7 @@ async function a_editCoursesetMapping(req, res) {
 
           if (insertResult.rowCount === 0) {
             throw new Error(
-              `Failed to insert subject ${subject.suj_id} for year ${
-                std_year + 1
+              `Failed to insert subject ${subject.suj_id} for year ${std_year + 1
               }, term ${term}`
             );
           }
