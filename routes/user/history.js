@@ -1,6 +1,7 @@
 const db = require("../../db");
 const { getUserFromToken } = require("../../utils/userutil");
 
+// TODO: ถ้าเราเพิ่มรายวิชานอกแผน ระบบจะยังหาไม่เห็น อาจจะต้องมีตัวแปรเข้ามาเพิ่มเพื่อกำหนดว่าเราเรียนตอนปีไหน ล่ะมั้งนะ
 async function getUserSubjectHistory(req, res) {
   try {
     const user = await getUserFromToken(req);
@@ -11,8 +12,15 @@ async function getUserSubjectHistory(req, res) {
         [user.uid]
       );
       const history_head = [];
+
       for (const subj of crs.rows) {
         const head_subj = history_head.find((f) => f.code == subj.subj_id);
+
+        const subjectNames = await db.query(
+          "SELECT cs.suj_name_en, cs.suj_name_th, cs.suj_credit, cs.cr_head_id FROM courseset_subject cs " +
+          "WHERE cs.cr_id = $1 AND cs.suj_id = $2",
+          [user.cr_id, subj.subj_id]
+        );
         // หาว่ามีรหัสวิชานี้อยู่แล้วมั้ย
         if (head_subj != null) {
           head_subj.learning_try.push({
@@ -23,6 +31,10 @@ async function getUserSubjectHistory(req, res) {
         } else {
           history_head.push({
             code: subj.subj_id,
+            suj_name_en: subjectNames.rowCount > 0 ? subjectNames.rows[0].suj_name_en : '',
+            suj_name_th: subjectNames.rowCount > 0 ? subjectNames.rows[0].suj_name_th : '',
+            cr_head_id: subjectNames.rowCount > 0 ? subjectNames.rows[0].cr_head_id : '',
+            credit: subjectNames.rowCount > 0 ? subjectNames.rows[0].suj_credit.split(' ')[0] : '',
             learning_try: [
               {
                 semester: subj.study_term,
@@ -70,6 +82,9 @@ async function updateUserSubjectHistory(req, res) {
       await db.query(`DELETE FROM user_subjecthistory WHERE uid = $1;`, [
         user.uid,
       ]);
+      if (subj_sql.length == 0) {
+        return getUserSubjectHistory(req, res);
+      }
       // เอาข้อมูลบางส่วนที่ไม่ได้ส่งมากับ body ยัดใส่ก่อนสร้าง sql placeholder
       const sql_placeholders = subj_sql
         .map(

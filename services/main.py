@@ -1,11 +1,12 @@
 # Import modules
 from university.msu import MSU
+import sys  # Add this line
 
 import psycopg2
 import configparser
 
 import datetime
-from datetime import date, datetime
+from datetime import date, datetime  # Update this import
 import time
 import multiprocessing
 import schedule
@@ -56,7 +57,7 @@ def getUniverselData():
         # for row in rows:
         #     print(row)
     return {
-        # TODO: it error when out of registration round date.
+        # Fix: Use date.today() instead of datetime.date.today
         "collapsed": not (date.today() < start_date and date.today() <= end_date),
         "first_day": start_date == date.today(),
         "time": date.today(),
@@ -69,74 +70,6 @@ def getUniverselData():
             "end_date": end_date
         }
     }
-
-
-def getInput(state='m'):
-    inp = input()
-    if inp == 'x' and state != 'main':
-        return f'main'
-    return f'{state}{inp}'
-
-def startUp():
-    m1res = []
-    m2res = []
-    pg_i_main = 'main'
-    while True:
-        if pg_i_main == 'main':
-            print("Planriean Data Service Script")
-            print("Choose Program Group")
-            print("[1] Get Faculty list")
-            print("[2] Courseset")
-            print("[3] Get Courses")
-            print("[4] ")
-            print("[5] ")
-            pg_i_main = getInput('m')
-        elif pg_i_main == 'm1':
-            m1res = MSU.scrap_fac_data()
-            pg_i_main = "main"
-        elif pg_i_main == 'm2':
-            print("Select Process")
-            print("[1] Update Faculty list")
-            print("[2] Update Faculty Detail")
-            print("[x] Main Menu")
-            pg_i_main = getInput('m2')
-        elif pg_i_main == 'm21':
-            for i in m1res:
-                print(i)
-                m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))
-            # MSU.scrap_courseset_list()
-            print(m2res)
-            pg_i_main = "m2"
-        elif pg_i_main == 'm22':
-            for i in m2res:
-                for j in i[1]:
-                    print(f'current: {i[0]} | {j}')
-                    MSU.scrap_courseset_detail(facultyid=i[0], courseset_id=j)
-            # MSU.scrap_courseset_detail(2, 1025005)
-            # MSU.scrap_courseset_detail()
-            pg_i_main = "m2"
-        elif pg_i_main == 'm3':
-            today = datetime.date.today()
-
-            year = today.year+543
-            year = int(input(f'Enter the year (default: {year}): ').strip() or year)
-            semester = int(input(f'Enter the semester (default: 1): ').strip() or 1)
-            # coursecode = input(f'Enter the coursecode (default: "00*"): ').strip() or '00*'
-            # MSU.scrap_courses_data(year=year, semester=semester, coursecode=coursecode)``
-            start_time = time.time()
-
-            MSU.scrap_courses_data(year=year, semester=semester, coursecode='00*')
-            for i in m1res:
-                formatted_number = str(i).zfill(2)
-                print(formatted_number)  # Output: 01
-                MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
-                # m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))
-
-            end_time = time.time()
-            process_time = end_time - start_time
-            print(f"Process time: {process_time} seconds")
-            pg_i_main = "main"
-        print('==================================')
 
 async def run_get_all_subjects(year = 2567, semester = 1):
     global isRegisScrapRunning
@@ -169,13 +102,8 @@ async def run_get_all_subjects(year = 2567, semester = 1):
     current_time = datetime.now().strftime("%H:%M:%S")
     print(f"{current_time}: done in {process_time:.2f} seconds.")
 
-
-
-if __name__ == '__main__':
-    # m1res = MSU.scrap_fac_data()
-    # run_get_all_subjects()
-    # startUp()
-
+def dumpCourseData():
+    global isRegisScrapRunning, scheduled_job, isTaskScrap
     r = None
     isRegisScrapRunning = False
     scheduled_job = None
@@ -255,3 +183,90 @@ if __name__ == '__main__':
         cur.close()
         con.close()
         print("Program interrupted by user. Exiting gracefully...")
+
+
+def getInput(state='m'):
+    inp = input()
+    # if inp == 'x' and state != 'main':
+    #     return f'main'
+    return f'{state}{inp}'
+
+def startUp():
+    m1res = []
+    m2res = []
+    pg_i_main = 'main'
+    while True:
+        if pg_i_main == 'main':
+            print("Planriean Data Service Script")
+            print("Choose Program Group")
+            print("[1] Get Faculty list")
+            print("[2] Courseset")
+            print("[3] Get Courses")
+            print("[4] ")
+            print("[5] Run Dump Course Data Script")
+            print("[x] Exit")
+            pg_i_main = getInput('m')
+        if pg_i_main == 'mx':
+            print("Exiting program...")
+            return
+        elif pg_i_main == 'm1':
+            m1res = MSU.scrap_fac_data()
+            pg_i_main = "main"
+        elif pg_i_main == 'm2':
+            print("Select Process")
+            print("[1] Update Faculty list")
+            print("[2] Update Faculty Detail")
+            print("[3] Update Subjects Pre-requisite (tough process warning)")
+            print("[x] Main Menu")
+            pg_i_main = getInput('m2')
+        elif pg_i_main == 'm21':
+            for i in m1res:
+                print(i)
+                m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))
+            print(m2res)
+            pg_i_main = "m2"
+        elif pg_i_main == 'm22':
+            for i in m2res:
+                for j in i[1]:
+                    print(f'current: {i[0]} | {j}')
+                    MSU.scrap_courseset_detail(facultyid=i[0], courseset_id=j)
+            pg_i_main = "m2"
+        elif pg_i_main == 'm23':
+            MSU.scrap_subject_prerequisite()
+            pg_i_main = "m2"
+        elif pg_i_main == 'm3':
+            # Fix: Use date.today() instead of datetime.date.today
+            today = date.today()
+
+            year = today.year + 543
+            year = int(input(f'Enter the year (default: {year}): ').strip() or year)
+            semester = int(input(f'Enter the semester (default: 1): ').strip() or 1)
+            start_time = time.time()
+
+            MSU.scrap_courses_data(year=year, semester=semester, coursecode='00*')
+            for i in m1res:
+                formatted_number = str(i).zfill(2)
+                print(formatted_number)
+                MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
+
+            end_time = time.time()
+            process_time = end_time - start_time
+            print(f"Process time: {process_time} seconds")
+            pg_i_main = "main"
+        elif pg_i_main == 'm5':
+            dumpCourseData()
+        else:
+            print("Invalid input. Please try again.")
+            pg_i_main = "main"
+        print('==================================\n')
+
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == "menu":
+        # m1res = MSU.scrap_fac_data()
+        # run_get_all_subjects()
+        # MSU.scrap_subject_prerequisite()
+        startUp()
+    else:
+        dumpCourseData()

@@ -167,7 +167,6 @@ async function createPlanUser(req, res) {
       ref_folder_plan_id,
     } = req.body;
     const uni_data = await getUniversityDetailWithNameFunc(university);
-    // console.log(uni_data.university_data.uni_id);
     const pre_result = await db.query(
       `SELECT * FROM plan_detail WHERE user_uid = $1 AND is_delete = false AND plan_name = $2;`,
       [user.uid, plan_name]

@@ -21,11 +21,11 @@ async function getUser(username, show_passwd = false) {
     return show_passwd
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
-          ...result.rows[0],
-          password: undefined,
-          plan_created: plancount.rows[0].count,
-          roles,
-        };
+        ...result.rows[0],
+        password: undefined,
+        plan_created: plancount.rows[0].count,
+        roles,
+      };
   } catch (err) {
     return null;
   }
@@ -38,8 +38,7 @@ async function getUserFromToken(req, show_passwd = false) {
     );
 
     let result = await db.query(
-      `SELECT * FROM user_detail WHERE ${
-        jwt_dc.email ? "email" : "lower(username)"
+      `SELECT * FROM user_detail WHERE ${jwt_dc.email ? "email" : "lower(username)"
       } = lower($1)${!jwt_dc.email ? " OR lower(email) = lower($2)" : ""}`,
       [...(jwt_dc.email ? [jwt_dc.email] : [jwt_dc.sub, jwt_dc.sub])]
     );
@@ -58,11 +57,11 @@ async function getUserFromToken(req, show_passwd = false) {
     return show_passwd
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
-          ...result.rows[0],
-          password: undefined,
-          plan_created: plancount.rows[0].count,
-          roles,
-        };
+        ...result.rows[0],
+        password: undefined,
+        plan_created: plancount.rows[0].count,
+        roles,
+      };
   } catch (err) {
     return null;
   }
@@ -86,11 +85,11 @@ async function getUserFromUID(uid, show_passwd = false) {
     return show_passwd
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
-          ...result.rows[0],
-          password: undefined,
-          plan_created: plancount.rows[0].count,
-          roles,
-        };
+        ...result.rows[0],
+        password: undefined,
+        plan_created: plancount.rows[0].count,
+        roles,
+      };
   } catch (err) {
     return null;
   }
@@ -133,7 +132,7 @@ async function getUserRoles(user) {
       // );
 
       const courseset_res = await db.query(
-        "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+        "SELECT cr_id, cr_key, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
         [sts.major_id]
       );
 
@@ -199,22 +198,19 @@ async function getUsers(
       ud.phone ILIKE $1 OR
       ud.email ILIKE $1 OR
       ud.auth_reg_username ILIKE $1
-    ) ${uni_id != 0 ? `AND ud.uni_id = $2` : ""} ${
-        role ? `AND COALESCE(r.role, 'user') ILIKE $3` : ""
-      }
+    ) ${uni_id != 0 ? `AND ud.uni_id = $2` : ""} ${role ? `AND COALESCE(r.role, 'user') ILIKE $3` : ""
+    }
   `
     : uni_id != 0
-    ? `WHERE ud.uni_id = $1 ${
-        role ? `AND COALESCE(r.role, 'user') ILIKE $2` : ""
+      ? `WHERE ud.uni_id = $1 ${role ? `AND COALESCE(r.role, 'user') ILIKE $2` : ""
       }`
-    : `${role ? `WHERE COALESCE(r.role, 'user') ILIKE $1` : ""}`;
+      : `${role ? `WHERE COALESCE(r.role, 'user') ILIKE $1` : ""}`;
 
   // Query to get the total count of users
   const totalCountResult = await db.query(
     `SELECT CAST(COUNT(ud.*) AS INT) AS total FROM user_detail ud
-     ${
-       role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
-     } ${searchCondition}`,
+     ${role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
+    } ${searchCondition}`,
     search
       ? uni_id != 0
         ? role
@@ -222,12 +218,12 @@ async function getUsers(
           : [`%${search}%`, uni_id]
         : [`%${search}%`]
       : uni_id != 0
-      ? role
-        ? [uni_id, role]
-        : [uni_id]
-      : role
-      ? [role]
-      : []
+        ? role
+          ? [uni_id, role]
+          : [uni_id]
+        : role
+          ? [role]
+          : []
   );
 
   const totalCount = totalCountResult.rows[0].total;
@@ -235,28 +231,25 @@ async function getUsers(
 
   // Query to get the paginated users
   const result = await db.query(
-    `SELECT DISTINCT ud.*${
-      role ? ", COALESCE(r.role, 'user') AS match_role " : " "
+    `SELECT DISTINCT ud.*${role ? ", COALESCE(r.role, 'user') AS match_role " : " "
     }
      FROM user_detail ud
-     ${
-       role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
-     } ${searchCondition} ${
-      search
-        ? uni_id != 0
-          ? role
-            ? "LIMIT $4 OFFSET $5"
-            : "LIMIT $3 OFFSET $4"
-          : role
+     ${role ? "LEFT JOIN user_additionrole r ON ud.uid = r.uid" : ""
+    } ${searchCondition} ${search
+      ? uni_id != 0
+        ? role
+          ? "LIMIT $4 OFFSET $5"
+          : "LIMIT $3 OFFSET $4"
+        : role
           ? "LIMIT $3 OFFSET $4"
           : "LIMIT $2 OFFSET $3"
-        : uni_id != 0
+      : uni_id != 0
         ? role
           ? "LIMIT $3 OFFSET $4"
           : "LIMIT $2 OFFSET $3"
         : role
-        ? "LIMIT $2 OFFSET $3"
-        : "LIMIT $1 OFFSET $2"
+          ? "LIMIT $2 OFFSET $3"
+          : "LIMIT $1 OFFSET $2"
     }`,
     search
       ? uni_id != 0
@@ -264,15 +257,15 @@ async function getUsers(
           ? [`%${search}%`, uni_id, role, limit, offset]
           : [`%${search}%`, uni_id, limit, offset]
         : role
-        ? [`%${search}%`, role, limit, offset]
-        : [`%${search}%`, limit, offset]
+          ? [`%${search}%`, role, limit, offset]
+          : [`%${search}%`, limit, offset]
       : uni_id != 0
-      ? role
-        ? [uni_id, role, limit, offset]
-        : [uni_id, limit, offset]
-      : role
-      ? [role, limit, offset]
-      : [limit, offset]
+        ? role
+          ? [uni_id, role, limit, offset]
+          : [uni_id, limit, offset]
+        : role
+          ? [role, limit, offset]
+          : [limit, offset]
   );
 
   const res = [];
@@ -295,7 +288,7 @@ async function getUsers(
     );
 
     const courseset_res = await db.query(
-      "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+      "SELECT cr_id, cr_key, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user.cr_id]
     );
 
@@ -360,7 +353,7 @@ async function getUserFromUsername(user) {
     );
 
     const courseset_res = await db.query(
-      "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+      "SELECT cr_id, cr_key, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user_nopass.cr_id]
     );
     const plancount = await db.query(
@@ -416,7 +409,7 @@ async function getUserFromGoogle(email) {
     );
 
     const courseset_res = await db.query(
-      "SELECT cr_id, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+      "SELECT cr_id, cr_key, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
       [user_nopass.cr_id]
     );
     const plancount = await db.query(

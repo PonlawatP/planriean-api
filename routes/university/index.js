@@ -2,6 +2,8 @@ const db = require("../../db");
 const {
   semesterRoundGroupData,
   semesterYearGroupData,
+  getCurrentSeason,
+  getSeasonRemaining,
 } = require("../../utils/seasonutil");
 const { getUserFromToken } = require("../../utils/userutil");
 
@@ -53,6 +55,19 @@ async function getUniversityDetailFunc(uni_id, type) {
     [uni_id]
   );
   if (university_list.rows.length != 0) {
+
+    if (type == "maintenance") {
+      const major_list = await db.query(
+        "SELECT count(*) FROM courseset_detail WHERE uni_id = $1;",
+        [uni_id]
+      );
+
+      const result = {
+        maintenance: major_list.rowCount == 0,
+      };
+      return result;
+    }
+
     const faculty_list = await db.query(
       "SELECT * FROM university_faculty WHERE uni_id = $1 ORDER BY fac_id;",
       [uni_id]
@@ -62,51 +77,80 @@ async function getUniversityDetailFunc(uni_id, type) {
     for (const faculty of facultys) {
       faculty.uni_id = undefined;
 
-      faculty.coursesets = structuredClone(learn_group.rows);
-      for (const courseset of faculty.coursesets) {
-        courseset.uni_id = undefined;
+      if (type == "major_group" || type == "major_list") {
+        faculty.coursesets = structuredClone(learn_group.rows);
+        for (const courseset of faculty.coursesets) {
+          courseset.uni_id = undefined;
 
-        const major_list = await db.query(
-          "SELECT name_th, credit, year, lowset_grade, fac_id, cr_id, cr_key, uni_id, courseset_id, major_key_ref, cr_group_id, name_en FROM courseset_detail WHERE uni_id = $1 AND fac_id = $2 AND cr_group_id = $3 ORDER BY cr_id;",
-          [uni_id, faculty.fac_id, courseset.cr_group_id]
-        );
-        // console.log(major_list.rows)
-        if (type == "major_group") {
-          let grouping = [];
-          for (const cld of major_list.rows) {
-            let gr = grouping.find(
-              (g) => g.cr_key.toLowerCase() == cld.cr_key.toLowerCase()
-            );
-            if (gr == null) {
-              grouping.push({
-                cr_key: cld.cr_key.toUpperCase(),
-                name_th: cld.name_th,
-                name_en: cld.name_en,
-                children: [
-                  {
-                    cr_id: cld.cr_id,
-                    courseset_id: cld.courseset_id,
-                    cr_group_id: cld.cr_group_id,
-                  },
-                ],
-              });
-            } else {
-              gr.children.push({
-                cr_id: cld.cr_id,
-                courseset_id: cld.courseset_id,
-                cr_group_id: cld.cr_group_id,
-              });
+          const major_list = await db.query(
+            "SELECT name_th, credit, year, lowset_grade, fac_id, cr_id, cr_key, uni_id, courseset_id, major_key_ref, cr_group_id, name_en FROM courseset_detail WHERE uni_id = $1 AND fac_id = $2 AND cr_group_id = $3 ORDER BY cr_id;",
+            [uni_id, faculty.fac_id, courseset.cr_group_id]
+          );
+          // console.log(major_list.rows)
+          if (type == "major_group") {
+            let grouping = [];
+            for (const cld of major_list.rows) {
+              let gr = grouping.find(
+                (g) => g.cr_key.toLowerCase() == cld.cr_key.toLowerCase()
+              );
+              if (gr == null) {
+                grouping.push({
+                  cr_key: cld.cr_key.toUpperCase(),
+                  name_th: cld.name_th,
+                  name_en: cld.name_en,
+                  children: [
+                    {
+                      cr_id: cld.cr_id,
+                      courseset_id: cld.courseset_id,
+                      cr_group_id: cld.cr_group_id,
+                    },
+                  ],
+                });
+              } else {
+                gr.children.push({
+                  cr_id: cld.cr_id,
+                  courseset_id: cld.courseset_id,
+                  cr_group_id: cld.cr_group_id,
+                });
+              }
             }
+            // console.log(grouping);
+            courseset.children = grouping;
+          } else {
+            courseset.children = major_list.rows;
           }
-          // console.log(grouping);
-          courseset.children = grouping;
-        } else {
-          courseset.children = major_list.rows;
         }
       }
     }
+
+    const seasons = await db.query(`
+    SELECT
+      YEAR,
+      seamster_round,
+      ss_round,
+      std_year,
+      ss_start,
+      ss_end 
+    FROM
+      seamster_detail
+      LEFT JOIN seamster_rounding ON seamster_detail.seamster_id = seamster_rounding.seamster_id 
+    WHERE
+      uni_id = $1
+    ORDER BY
+      ss_start;
+    `, [uni_id]);
+
+    const university_data = {
+      ...university_list.rows[0],
+      seasons: {
+        current: getCurrentSeason(seasons.rows, new Date().toISOString()),
+        incomming: getCurrentSeason(seasons.rows, new Date().toISOString(), true),
+        remaining: getSeasonRemaining(seasons.rows, new Date().toISOString()),
+      }
+    };
+
     const result = {
-      university_data: university_list.rows[0],
+      university_data: university_data,
       facultys,
       coursesets: learn_group.rows,
     };
@@ -173,11 +217,7 @@ async function getUniversityDetailWithNameFunc(uni_name) {
   );
   if (university_list.rows.length != 0) {
     const faculty_list = await db.query(
-      `SELECT *,
-    to_char(
-      refresh_updated_at AT TIME ZONE 'UTC' + interval '543 years',
-      'DD/MM/YY HH24:MI:SS'
-    ) AS refresh_updated_at FROM university_faculty WHERE uni_id = $1;`,
+      `SELECT * FROM university_faculty WHERE uni_id = $1;`,
       [university_list.rows[0].uni_id]
     );
     let facultys = faculty_list.rows;
