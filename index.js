@@ -110,6 +110,7 @@ app.post("/auth/token", authFromToken);
 app.get("/user", requireJWTAuth, authGetUser);
 app.get("/user/history", requireJWTAuth, getUserSubjectHistory);
 app.put("/user/history", requireJWTAuth, updateUserSubjectHistory);
+app.put("/user", requireJWTAuth, updateUser);
 app.put("/user/update/fs", updateFSUser);
 
 app.get("/plan", requireJWTAuth, getListPlanUser);

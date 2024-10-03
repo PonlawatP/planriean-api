@@ -37,11 +37,20 @@ async function getUserFromToken(req, show_passwd = false) {
       process.env.SECRET_JWT
     );
 
-    let result = await db.query(
-      `SELECT * FROM user_detail WHERE ${jwt_dc.email ? "email" : "lower(username)"
-      } = lower($1)${!jwt_dc.email ? " OR lower(email) = lower($2)" : ""}`,
-      [...(jwt_dc.email ? [jwt_dc.email] : [jwt_dc.sub, jwt_dc.sub])]
-    );
+    let result;
+
+    if (jwt_dc?.login_with == "auth-msu") {
+      result = await db.query(
+        "SELECT * FROM user_detail WHERE auth_reg_username = $1",
+        [jwt_dc.auth_reg_username]
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM user_detail WHERE ${jwt_dc.email ? "email" : "lower(username)"
+        } = lower($1)${!jwt_dc.email ? " OR lower(email) = lower($2)" : ""}`,
+        [...(jwt_dc.email ? [jwt_dc.email] : [jwt_dc.sub, jwt_dc.sub])]
+      );
+    }
 
     if (result.rows.length == 0) {
       return null;
@@ -442,6 +451,74 @@ async function getUserFromGoogle(email) {
     return null;
   }
 }
+async function getUserFromAuthMSU(student_id) {
+  const result = await db.query("SELECT * FROM user_detail WHERE auth_reg_username = $1", [
+    student_id,
+  ]);
+
+  if (result.rows.length > 0) {
+    let user_nopass = { ...result.rows[0], password: undefined };
+
+    // Check if std_id matches student_id and update if necessary
+    if (user_nopass.std_id !== student_id) {
+      const updateResult = await db.query(
+        "UPDATE user_detail SET std_id = $1 WHERE uid = $2 RETURNING std_id",
+        [student_id, user_nopass.uid]
+      );
+      if (updateResult.rowCount > 0) {
+        user_nopass.std_id = updateResult.rows[0].std_id;
+      }
+    }
+
+    const uni_res = await db.query(
+      "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
+      [user_nopass.uni_id]
+    );
+
+    const fac_res = await db.query(
+      "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
+      [user_nopass.uni_id, user_nopass.fac_id]
+    );
+
+    const maj_res = await db.query(
+      "SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3",
+      [user_nopass.uni_id, user_nopass.fac_id, user_nopass.major_id]
+    );
+
+    const courseset_res = await db.query(
+      "SELECT cr_id, cr_key, name_th, name_en FROM courseset_detail WHERE cr_id = $1",
+      [user_nopass.cr_id]
+    );
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [user_nopass.uid]
+    );
+
+    const user_roles = await getUserRoles(user_nopass);
+
+    return {
+      user: {
+        login_with: "auth-msu",
+        ...user_nopass,
+        uni_id: undefined,
+        fac_id: undefined,
+        major_id: undefined,
+        cr_id: undefined,
+        roles: user_roles,
+        plan_created: plancount.rows[0].count,
+        study_status: {
+          university: uni_res.rowCount == 0 ? null : { ...uni_res.rows[0] },
+          faculty: fac_res.rowCount == 0 ? null : { ...fac_res.rows[0] },
+          major: maj_res.rowCount == 0 ? null : { ...maj_res.rows[0] },
+          courseset:
+            courseset_res.rowCount == 0 ? null : { ...courseset_res.rows[0] },
+        },
+      },
+    };
+  } else {
+    return null;
+  }
+}
 
 const encryptPassword = async (password = "") => {
   const salt = await bcrypt.genSalt(10);
@@ -457,6 +534,7 @@ module.exports = {
   getUserRoles,
   getUserFromGoogle,
   getUserFromUsername,
+  getUserFromAuthMSU,
   checkUsername,
   checkEmail,
   encryptPassword,

@@ -6,6 +6,7 @@ const {
   checkUsername,
   checkEmail,
   encryptPassword,
+  getUserFromAuthMSU,
 } = require("../../utils/userutil");
 
 // Sanitize input function
@@ -14,10 +15,10 @@ function sanitizeInput(input) {
     ? Number.isInteger(input)
       ? input
       : input
-          .replace(/<script.*?>.*?<\/script>/gi, "")
-          .replace(/<\/?[^>]+(>|$)/g, "")
-          .trim()
-    : undefined;
+        .replace(/<script.*?>.*?<\/script>/gi, "")
+        .replace(/<\/?[^>]+(>|$)/g, "")
+        .trim()
+    : null;
 }
 
 async function registerUser(req, res) {
@@ -85,20 +86,78 @@ async function registerUser(req, res) {
         sanitizedStdStartYear,
       ]
     );
-    res != null ? res.json({ success: true }) : () => {};
+    res != null ? res.json({ success: true }) : () => { };
     return true;
   } catch (error) {
     console.log(error);
 
     res != null
       ? res
-          .status(400)
-          .json({ success: false, error: error.code, msg: error.detail })
-      : () => {};
+        .status(400)
+        .json({ success: false, error: error.code, msg: error.detail })
+      : () => { };
     return false;
   }
 }
 
+async function updateUser(req, res) {
+  try {
+    const jwt_dc = jwt.decode(
+      req.headers["authorization"],
+      process.env.SECRET_JWT
+    );
+    const { uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username } = req.body;
+
+    // Sanitize inputs
+    const sanitizedUniId = sanitizeInput(uni_id);
+    const sanitizedFacId = sanitizeInput(fac_id);
+    const sanitizedCrId = sanitizeInput(cr_id);
+    const sanitizedStdId = std_id.length == 11 ? sanitizeInput(std_id) : "";
+    const sanitizedStdName = sanitizeInput(std_name);
+    const sanitizedStdSurname = sanitizeInput(std_surname);
+    const sanitizedStdStartYear = sanitizeInput(std_start_year);
+    const sanitizedEmail = sanitizeInput(email);
+    const sanitizedUsername = sanitizeInput(username);
+
+    await db.query(
+      `UPDATE "public"."user_detail" SET 
+        "uni_id" = $1, 
+        "fac_id" = $2, 
+        "cr_id" = $3, 
+        "std_id" = $4, 
+        "std_name" = $5, 
+        "std_surname" = $6, 
+        "std_start_year" = $7, 
+        "email" = $8, 
+        "username" = $9 
+      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.email ? "email" : "username"} = $10;`,
+      [
+        sanitizedUniId,
+        sanitizedFacId,
+        sanitizedCrId,
+        sanitizedStdId,
+        sanitizedStdName,
+        sanitizedStdSurname,
+        sanitizedStdStartYear,
+        sanitizedEmail,
+        sanitizedUsername,
+        jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.email ? jwt_dc.email : jwt_dc.user.username,
+      ]
+    );
+
+    const result = jwt_dc.login_with == "auth-msu" ? await getUserFromAuthMSU(jwt_dc.auth_reg_username) : jwt_dc.email
+      ? await getUserFromGoogle(jwt_dc.email)
+      : await getUserFromUsername(jwt_dc.user.username);
+    res.json(result);
+    return true;
+  } catch (error) {
+    console.error(error);
+    res
+      .status(400)
+      .json({ success: false, error: error.code, msg: error.detail });
+    return false;
+  }
+}
 async function updateFSUser(req, res) {
   try {
     const jwt_dc = jwt.decode(
@@ -117,8 +176,7 @@ async function updateFSUser(req, res) {
     const sanitizedStdStartYear = sanitizeInput(std_start_year);
 
     await db.query(
-      `UPDATE "public"."user_detail" SET "uni_id" = $1, fac_id = $2, "major_id" = $3, "std_id" = $4, "cr_id" = $5, "std_start_year" = $6 WHERE ${
-        jwt_dc.email ? "email" : "username"
+      `UPDATE "public"."user_detail" SET "uni_id" = $1, fac_id = $2, "major_id" = $3, "std_id" = $4, "cr_id" = $5, "std_start_year" = $6 WHERE ${jwt_dc.email ? "email" : "username"
       } = $7;`,
       [
         sanitizedUniId,
@@ -191,6 +249,7 @@ async function checkUsernameUser(req, res) {
 
 module.exports = {
   registerUser,
+  updateUser,
   updateFSUser,
   checkEmailUser,
   checkUsernameUser,

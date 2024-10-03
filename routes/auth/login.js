@@ -4,7 +4,9 @@ const { registerUser } = require("./register");
 const {
   getUserFromGoogle,
   getUserFromUsername,
+  getUserFromAuthMSU
 } = require("../../utils/userutil");
+const { getFacIdFromFacNameTh } = require("../../utils/universityutil");
 
 async function authToken(req, res) {
   const payload = {
@@ -20,10 +22,48 @@ async function authFromToken(req, res) {
       req.headers["authorization"],
       process.env.SECRET_JWT
     );
-    // console.log(jwt_dc)
 
     // console.log(jwt_dc);
     let result;
+
+    if ((req.headers["gateway"] || "normal").toLowerCase() == "auth-msu") {
+      result = await getUserFromAuthMSU(jwt_dc.student_id);
+
+      console.log(jwt_dc);
+
+      if (result == null) {
+        const bd = {
+          body: {
+            username: null,
+            password: "null",
+            uni_id: 1,
+            fac_id: await getFacIdFromFacNameTh(1, jwt_dc.facualty_th),
+            major_id: null,
+            std_id: jwt_dc.student_id,
+            cr_id: jwt_dc.course_id,
+            email: null,
+            image: jwt_dc.picture,
+            std_name: jwt_dc.name_en.split(" ")[0],
+            std_surname: jwt_dc.name_en.split(" ")[jwt_dc.name_en.split(" ").length - 1],
+            phone: null,
+            email: null,
+            auth_reg_username: jwt_dc.student_id,
+            std_start_year: jwt_dc.start_educated_date.split("/")[2],
+          },
+        };
+
+        const is_registered = await registerUser(bd, null);
+
+        if (is_registered) {
+          result = await getUserFromAuthMSU(jwt_dc.student_id);
+        } else {
+          throw new Error("error");
+        }
+      }
+
+      return res.json(result);
+    }
+
 
     if (jwt_dc.sub) {
       result = await getUserFromUsername(jwt_dc.sub);

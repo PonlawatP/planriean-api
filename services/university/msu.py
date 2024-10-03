@@ -11,6 +11,7 @@ import psycopg2
 import configparser
 import time
 from datetime import datetime, timedelta
+import sys  # Add this line
 
 from urllib.parse import urlparse, parse_qs
 from psycopg2.extras import execute_values
@@ -327,10 +328,77 @@ class MSU:
         run('th')
         # run('en')
 
+    # function that moveing pre-req subject data in moment of accident forget to re-defined fucking database server
+    # def fucking_update_prerequisite():
+    #     cur = con.cursor()
+    #     query = """
+    #     SELECT DISTINCT suj_real_id, suj_pre_req
+    #     FROM courseset_subject 
+    #     WHERE suj_pre_req_updated is TRUE 
+    #     AND suj_real_id is not null
+    #     """
+    #     cur.execute(query)
+    #     subjects_to_update = cur.fetchall()
+        
+    #     total_subjects = len(subjects_to_update)
+    #     print(f"Found {total_subjects} subjects to update.")
+
+    #     # Create a new database connection using database_main config
+    #     config_main = configparser.ConfigParser()
+    #     config_main.read('pg_config.ini')
+        
+    #     sqluser_main = config_main['database_main'].get('sqluser')
+    #     sqlpass_main = config_main['database_main'].get('sqlpass')
+    #     dbname_main = config_main['database_main'].get('dbname')
+    #     schema_name_main = config_main['database_main'].get('schema_name')
+    #     host_main = config_main['database_main'].get('host')
+
+    #     query_schema_main = 'SET search_path to ' + schema_name_main + ';'
+
+    #     # Connect to the main database
+    #     con_main = psycopg2.connect(dbname=dbname_main, user=sqluser_main, password=sqlpass_main, host=host_main)
+    #     cur_main = con_main.cursor()
+    #     cur_main.execute(query_schema_main)
+
+    #     def update_prerequisite(suj_real_id, suj_pre_req):
+    #         update_query = """
+    #         UPDATE courseset_subject
+    #         SET suj_pre_req = %s,
+    #             suj_pre_req_updated = TRUE
+    #         WHERE suj_real_id = %s
+    #         """
+    #         cur_main.execute(update_query, (suj_pre_req, suj_real_id))
+    #         con_main.commit()
+        
+    #     for index, (suj_real_id,suj_pre_req) in enumerate(subjects_to_update, 1):
+    #         print(f"Updating subject {index}/{total_subjects}: {suj_real_id} -> {suj_pre_req}")
+
+    #         update_prerequisite(suj_real_id, suj_pre_req)
+    #         # prereq_codes = run(suj_real_code=suj_real_id)
+            
+    #         # if prereq_codes:
+    #         #     update_query = """
+    #         #     UPDATE courseset_subject
+    #         #     SET suj_pre_req = %s,
+    #         #         suj_pre_req_updated = TRUE
+    #         #     WHERE suj_real_id = %s
+    #         #     """
+    #         #     cur.execute(update_query, (prereq_codes, suj_real_id))
+    #         #     con.commit()
+    #         #     print(f"Updated prerequisite for {suj_real_id}: {prereq_codes}")
+    #         # else:
+    #         #     print(f"No prerequisites found for {suj_real_id}")
+            
+    #         # Add a small delay to avoid overwhelming the server
+    #         # time.sleep(1)
+        
+    #     cur.close()
+    #     print("Prerequisite update completed.")
+
     # scrap_subject_prerequisite
     # ดึงข้อมูลแผนหลักสูตรมาเก็บไว้
     # ประกอบด้วย
-        # - หัวข้��ของกล��่มรายวิชาแต่ละหลักสูตร (สามารถซ้อนกันได้) : เก็บใน courseset_detail
+        # - หัวข้ของกล่มรายวิชาแต่ละหลักสูตร (สามารถซ้อนกันได้) : เก็บใน courseset_detail
             # - หน่วยกิตรวมของกลุ่มรายวิชา : เก็บใน courseset_detail
             # - ข้อมูลรายวิชาในกลุ่มของรายวิชาของหลักสูตร : เก็บใน courseset_subject
     # params
@@ -341,7 +409,7 @@ class MSU:
     def scrap_subject_prerequisite():
         uni_id = MSU.getUniversityID("MSU")
         
-        def run(lang = 'th', suj_real_code = '0'):
+        def run(lang = 'th', suj_real_code = '0', old_attempts = 0):
             try:
                 # request web page with post method
                 response = requests.post(f'https://reg.msu.ac.th/registrar/program_info_2.asp?courseid={suj_real_code}', headers=headers)
@@ -371,19 +439,19 @@ class MSU:
                 else:
                     return None
             except Exception as e:
-                print(f"\nError: {e}")
-                attempts = 0
-                while attempts < 3:
-                    print(f"\rCooldown: {20 - attempts * 3} seconds remaining...", end="", flush=True)
-                    time.sleep(20)
-                    print("\rRetrying...                            ", end="", flush=True)
-                    try:
-                        return run(lang, suj_real_code)
-                    except Exception:
-                        attempts += 1
-                print("\nFailed after 3 attempts. Stopping script.")
-                sys.exit(1)
+                attempts = old_attempts + 0
+                cooldown_times = [2, 2, 2, 10, 20]
+                if attempts >= len(cooldown_times):
+                    attempts = len(cooldown_times) - 1
 
+                if(attempts >= 3):
+                    print(f"\nError: {e}")
+                cooldown = cooldown_times[attempts]
+                for remaining in range(cooldown, 0, -1):
+                    print(f"\rRestart in {remaining} seconds...", end="", flush=True)
+                    time.sleep(1)
+                print("\rRetrying...                            ", end="", flush=True)
+                return run(lang, suj_real_code, attempts+1)
         def get_subjects_to_update():
             with psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host) as conn:
                 with conn.cursor() as cur:
@@ -413,7 +481,7 @@ class MSU:
                     overall_progress = (index / total_subjects) * 100
                     batch_progress = ((index - 1) % 500 + 1) / 500 * 100
                     
-                    progress_message = f"\rUpdating subject: {subject_code} | Overall Progress: {overall_progress:.2f}% ({index}/{total_subjects}) | Batch Progress: {batch_progress:.2f}%"
+                    progress_message = f"\rUpdating subject: {subject_code} | Overall Progress: {overall_progress:.2f}% ({index}/{total_subjects}) [{batch_progress:.2f}%]"
                     print(f"{progress_message:<100}", end="", flush=True)
                     
                     prereq_codes = run('th', subject_code)

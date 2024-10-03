@@ -267,6 +267,7 @@ if __name__ == '__main__':
         # m1res = MSU.scrap_fac_data()
         # run_get_all_subjects()
         # MSU.scrap_subject_prerequisite()
+        # MSU.fucking_update_prerequisite()
         startUp()
     else:
         dumpCourseData()
