@@ -34,7 +34,6 @@ const {
 } = require("./routes/plan");
 const {
   getCoursesetDetail,
-  getCoursesetSubjectRestricted,
   getSubjectGroups,
   getLectureGroups,
   a_addCoursesetDetail,
@@ -95,6 +94,7 @@ const {
   a_deleteUserRole,
   a_editUserRole,
 } = require("./routes/users");
+const { getPlanRestricted, updatePlanRestricted, getPlanSubjectsRestricted, updatePlanSubjectsRestricted } = require("./routes/plan-restrict");
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json({ limit: "6mb" }));
@@ -119,11 +119,6 @@ app.get("/plan/view/:plan_id", requireJWTAuth, getPlanUser);
 app.put("/plan/view/:plan_id", requireJWTAuth, updatePlanUser);
 app.delete("/plan/view/:plan_id", requireJWTAuth, deletePlanUser);
 app.get("/plan/view/:plan_id/subject", requireJWTAuth, getPlanSubjectsUser);
-app.get(
-  "/plan/view/:plan_id/subject/restrict",
-  requireJWTAuth,
-  getCoursesetSubjectRestricted
-);
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser);
 
 app.get("/course", getCourses);
@@ -316,6 +311,12 @@ app.delete(
   "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:sub",
   a_manageRegisterSubTimeline
 );
+
+// plan restricted
+app.get("/plan-restrict/view/:restgrp_id", requireJWTAuth, getPlanRestricted);
+app.put("/plan-restrict/view/:restgrp_id", requireJWTAuth, updatePlanRestricted);
+app.get("/plan-restrict/view/:restgrp_id/subject", requireJWTAuth, getPlanSubjectsRestricted);
+app.put("/plan-restrict/view/:restgrp_id/subject", requireJWTAuth, updatePlanSubjectsRestricted);
 
 /** end admin section */
 

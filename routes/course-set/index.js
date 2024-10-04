@@ -1,6 +1,7 @@
 const db = require("../../db");
 const { templateGE } = require("../../utils/customs/msu");
 const { getUserFromToken, getUserFromUID } = require("../../utils/userutil");
+const { getSubjectDataFromPlanRestrictSubject } = require("../plan-restrict");
 
 async function getCoursesetDetail(req, res) {
   try {
@@ -247,7 +248,8 @@ async function getCoursesetSubject(req, res) {
     res.status(404).send("Courseset Not Found");
   }
 }
-async function getCoursesetSubjectRestricted(req, res) {
+
+async function getCoursesetSubjectRestricted(req) {
   try {
     const user = await getUserFromToken(req);
     const { plan_id } = req.params;
@@ -264,7 +266,7 @@ async function getCoursesetSubjectRestricted(req, res) {
 
         const plan_restricts = await db.query(
           "SELECT * FROM courseset_restrictgrp WHERE cr_id = $1 AND uni_id = $2 AND std_year = $3 AND term = $4;",
-          [plan.cr_id, plan.uni_id, plan.std_year, plan.cr_seamseter]
+          [plan.cr_id, plan.uni_id, plan.cr_year, plan.cr_seamseter]
         );
 
         for (const prs of plan_restricts.rows) {
@@ -273,25 +275,22 @@ async function getCoursesetSubjectRestricted(req, res) {
             [prs.cr_restgrp_id, plan_user.std_id]
           );
           if (plan_restrict_users.rows.length > 0) {
-            const plan_restrict_subjects = await db.query(
-              "SELECT * FROM restrictgrp_subject WHERE cr_restgrp_id = $1;",
-              [prs.cr_restgrp_id]
+
+            const subjects_res = await getSubjectDataFromPlanRestrictSubject(
+              prs.cr_restgrp_id,
+              plan.cr_year,
+              plan.cr_seamseter
             );
-            plan_restrict = { ...prs, subjects: plan_restrict_subjects.rows };
+            plan_restrict = { detail: prs, subjects: subjects_res };
           }
         }
       }
-      const result = {
-        plan_restrict,
-      };
-      res.json(result);
+
+      return plan_restrict;
     }
   } catch (err) {
     console.error(err);
-    const result = {
-      plan_restrict,
-    };
-    res.status(404).json(result);
+    return null;
   }
 }
 

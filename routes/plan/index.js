@@ -3,7 +3,7 @@ const db = require("../../db");
 const { getUserFromToken } = require("../../utils/userutil");
 const { createDbDate } = require("../../utils/dateutil");
 const { getUniversityDetailWithNameFunc } = require("../university");
-
+const { getCoursesetSubjectRestricted } = require("../course-set");
 async function isPlanOwner(req) {
   try {
     const user = await getUserFromToken(req);
@@ -16,7 +16,7 @@ async function isPlanOwner(req) {
     if (result.rows.length > 0 || result.rows[0].plan_uid == user.uid) {
       return true;
     }
-  } catch (error) {}
+  } catch (error) { }
   return false;
 }
 
@@ -122,9 +122,12 @@ async function getPlanUser(req, res) {
         plan_detail.cr_seamseter
       );
 
+      const restricted = await getCoursesetSubjectRestricted(req);
+
       const plan_res = {
         detail: plan_detail,
         subjects: subjects_res,
+        restricted: restricted,
       };
 
       if (plan_detail.user_uid == user.uid) {
@@ -175,8 +178,7 @@ async function createPlanUser(req, res) {
     const result = await db.query(
       `INSERT INTO "plan_detail" ("plan_name", "user_uid", "cr_year", "cr_seamseter", "cr_id", "std_year", "uni_id", "fac_id", "major_id", "plan_color", "plan_img", "plan_dark", "is_folder", "ref_folder-plan_id", "create_at", "status") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *;`,
       [
-        `${plan_name}${
-          pre_result.rowCount > 0 ? ` (${pre_result.rowCount + 1})` : ""
+        `${plan_name}${pre_result.rowCount > 0 ? ` (${pre_result.rowCount + 1})` : ""
         }`,
         user.uid,
         cr_year,
