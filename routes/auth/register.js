@@ -112,7 +112,7 @@ async function updateUser(req, res) {
     const sanitizedUniId = sanitizeInput(uni_id);
     const sanitizedFacId = sanitizeInput(fac_id);
     const sanitizedCrId = sanitizeInput(cr_id);
-    const sanitizedStdId = std_id.length == 11 ? sanitizeInput(std_id) : "";
+    const sanitizedStdId = std_id != null && std_id.length == 11 ? sanitizeInput(std_id) : "";
     const sanitizedStdName = sanitizeInput(std_name);
     const sanitizedStdSurname = sanitizeInput(std_surname);
     const sanitizedStdStartYear = sanitizeInput(std_start_year);

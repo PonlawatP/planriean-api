@@ -248,6 +248,34 @@ async function updatePlanUser(req, res) {
       .json({ success: false, error: error.code, msg: error.detail });
   }
 }
+async function updatePlanName(req, res) {
+  try {
+    const user = await getUserFromToken(req);
+    const { plan_id } = req.params;
+    const { plan_name } = req.body;
+
+    const result = await db.query(
+      `UPDATE "plan_detail" SET "plan_name" = $1, "update_at" = to_timestamp($2) WHERE "plan_id" = $3 AND "user_uid" = $4 RETURNING *;`,
+      [
+        plan_name,
+        Date.now() / 1000.0,
+        plan_id,
+        user.uid
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 404, msg: "Plan not found or you don't have permission to update it" });
+    }
+
+    res.json({ success: true, result: result.rows[0] });
+  } catch (error) {
+    res
+      .status(400)
+      .json({ success: false, error: error.code, msg: error.detail });
+  }
+}
+
 async function getPlanSubjectsUser(req, res) {
   try {
     const user = await getUserFromToken(req);
@@ -384,4 +412,5 @@ module.exports = {
   updatePlanUser,
   updatePlanSubjectsUser,
   deletePlanUser,
+  updatePlanName
 };

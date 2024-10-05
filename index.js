@@ -31,6 +31,7 @@ const {
   updatePlanSubjectsUser,
   getPlanSubjectsUser,
   deletePlanUser,
+  updatePlanName,
 } = require("./routes/plan");
 const {
   getCoursesetDetail,
@@ -117,6 +118,7 @@ app.get("/plan", requireJWTAuth, getListPlanUser);
 app.post("/plan/create", requireJWTAuth, createPlanUser);
 app.get("/plan/view/:plan_id", requireJWTAuth, getPlanUser);
 app.put("/plan/view/:plan_id", requireJWTAuth, updatePlanUser);
+app.put("/plan/view/:plan_id/name", requireJWTAuth, updatePlanName);
 app.delete("/plan/view/:plan_id", requireJWTAuth, deletePlanUser);
 app.get("/plan/view/:plan_id/subject", requireJWTAuth, getPlanSubjectsUser);
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser);
