@@ -13,6 +13,9 @@ const {
   authToken,
   authGetUser,
   authFromToken,
+  forgetPassword,
+  verifyOTP,
+  changePassword,
 } = require("./routes/auth/login");
 const { loginMiddleware } = require("./middleware/loginMiddleware");
 const { requireJWTAuth } = require("./middleware/requireJWTAuth");
@@ -107,6 +110,9 @@ app.post("/auth/register/email", checkEmailUser);
 app.post("/auth/register/username", checkUsernameUser);
 app.post("/auth/login", loginMiddleware, authToken);
 app.post("/auth/token", authFromToken);
+app.post("/auth/forget-password", forgetPassword);
+app.post("/auth/verify-otp", verifyOTP);
+app.post("/auth/change-password", changePassword);
 
 app.get("/user", requireJWTAuth, authGetUser);
 app.get("/user/history", requireJWTAuth, getUserSubjectHistory);

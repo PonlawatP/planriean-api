@@ -4,9 +4,13 @@ const { registerUser } = require("./register");
 const {
   getUserFromGoogle,
   getUserFromUsername,
-  getUserFromAuthMSU
+  getUserFromAuthMSU,
+  encryptPassword
 } = require("../../utils/userutil");
 const { getFacIdFromFacNameTh } = require("../../utils/universityutil");
+const crypto = require('crypto');
+const { createTransporter } = require("../../utils/mailutil");
+const bcrypt = require('bcryptjs');
 
 async function authToken(req, res) {
   const payload = {
@@ -191,8 +195,134 @@ async function authGetUser(req, res) {
   }
 }
 
+async function forgetPassword(req, res) {
+  const { email } = req.body;
+  const user = await getUserFromGoogle(email);
+  if (user) {
+    await sendOTP(email);
+    res.json({ success: true, message: "OTP sent to email" });
+  } else {
+    res.status(404).json({ success: false, message: "User not found" });
+  }
+}
+
+async function resendOTP(req, res) {
+  const { email } = req.body;
+  const user = await getUserFromGoogle(email);
+  if (user) {
+    await sendOTP(email);
+    res.json({ success: true, message: "New OTP sent to email" });
+  } else {
+    res.status(404).json({ success: false, message: "User not found" });
+  }
+}
+
+async function sendOTP(email) {
+  // Generate OTP
+  const otp = crypto.randomInt(100000, 999999).toString();
+
+  // Hash the OTP
+  const hashedOTP = await encryptPassword(otp);
+
+  // Update user_detail table with new hashed OTP
+  await db.query(
+    'UPDATE user_detail SET otp = $1, otp_expires_at = $2, otp_created_at = CURRENT_TIMESTAMP WHERE email = $3',
+    [hashedOTP, new Date(Date.now() + 3 * 60 * 1000), email]
+  );
+
+  // Send email with OTP
+  const mailOptions = {
+    from: `"Planriean" <${process.env.USER_EMAIL}>`,
+    to: email,
+    subject: 'รหัส OTP สำหรับรีเซ็ตรหัสผ่าน',
+    html: `
+      <p>รหัส OTP สำหรับรีเซ็ตรหัสผ่านของคุณคือ</p>
+      <h2 style="font-size: 24px; font-weight: bold;">${otp}</h2>
+      <p>รหัส OTP นี้จะหมดอายุใน 3 นาที</p>
+
+    <p>หากพบปัญหาเพิ่มเติม สามารถติดต่อได้ที่:</p>
+    <ul>
+      <li>Facebook: <a href="https://fb.com/planrieantheplan">fb.com/planrieantheplan</a></li>
+      <li>Email: <a href="mailto:contact@planriean.com">contact@planriean.com</a></li>
+    </ul>
+    `
+  };
+
+  const transporter = await createTransporter();
+  await transporter.sendMail(mailOptions);
+}
+
+async function verifyOTP(req, res) {
+  const { email, otp } = req.body;
+
+  // Get the stored hashed OTP
+  const result = await db.query(
+    'SELECT otp, otp_expires_at FROM user_detail WHERE email = $1 AND otp_expires_at > $2',
+    [email, new Date()]
+  );
+
+  if (result.rows.length > 0) {
+    const storedHashedOTP = result.rows[0].otp;
+    const otpExpiresAt = result.rows[0].otp_expires_at;
+
+    // Compare the provided OTP with the stored hashed OTP
+    const isOTPValid = await bcrypt.compare(otp, storedHashedOTP);
+
+    if (isOTPValid) {
+      // If OTP is verified, extend its expiration time to 1 hour
+      await db.query(
+        'UPDATE user_detail SET otp_expires_at = $1 WHERE email = $2',
+        [new Date(Date.now() + 60 * 60 * 1000), email]
+      );
+
+      res.json({ success: true, message: "OTP verified successfully" });
+    } else {
+      res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
+  } else {
+    res.status(400).json({ success: false, message: "Expired or non-existent OTP" });
+  }
+}
+
+async function changePassword(req, res) {
+  const { email, otp, newPassword } = req.body;
+
+  // Get the stored hashed OTP
+  const result = await db.query(
+    'SELECT otp, otp_expires_at FROM user_detail WHERE email = $1 AND otp_expires_at > $2',
+    [email, new Date()]
+  );
+
+  if (result.rows.length > 0) {
+    const storedHashedOTP = result.rows[0].otp;
+
+    // Compare the provided OTP with the stored hashed OTP
+    const isOTPValid = await bcrypt.compare(otp, storedHashedOTP);
+
+    if (isOTPValid) {
+      // OTP is valid, update user's password
+      const hashedPass = await encryptPassword(newPassword);
+
+      await db.query(
+        'UPDATE user_detail SET password = $1, otp = NULL, otp_expires_at = NULL WHERE email = $2',
+        [hashedPass, email]
+      );
+
+      res.json({ success: true, message: "Password updated successfully" });
+    } else {
+      res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
+  } else {
+    res.status(400).json({ success: false, message: "Expired or non-existent OTP" });
+  }
+}
+
 module.exports = {
   authToken,
   authGetUser,
   authFromToken,
+  forgetPassword,
+  resendOTP,
+  verifyOTP,
+  changePassword
 };
