@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
+const fs = require("fs");
 
 const OAuth2 = google.auth.OAuth2;
 
@@ -35,10 +36,16 @@ const createTransporter = async () => {
                 clientSecret: process.env.CLIENT_SECRET,
                 refreshToken: process.env.REFRESH_TOKEN,
             },
+            dkim: {
+                domainName: process.env.DKIM_DOMAIN,
+                keySelector: process.env.DKIM_SELECTOR,
+                privateKey: process.env.DKIM_PRIVATE_KEY,
+            },
         });
         return transporter;
     } catch (err) {
-        return err
+        console.error("Error creating transporter:", err);
+        throw err;
     }
 };
 
