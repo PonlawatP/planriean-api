@@ -7,6 +7,7 @@ const {
   checkEmail,
   encryptPassword,
   getUserFromAuthMSU,
+  getUserFromUID,
 } = require("../../utils/userutil");
 const { createTransporter } = require("../../utils/mailutil");
 
@@ -128,6 +129,8 @@ async function updateUser(req, res) {
     );
     const { uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username, image } = req.body;
 
+    console.log({ uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username, image });
+
     // Sanitize inputs
     const sanitizedUniId = sanitizeInput(uni_id);
     const sanitizedFacId = sanitizeInput(fac_id);
@@ -152,7 +155,7 @@ async function updateUser(req, res) {
         "email" = $8, 
         "username" = $9,
         "image" = $10
-      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.email ? "email" : "username"} = $11;`,
+      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : "uid"} = $11;`,
       [
         sanitizedUniId,
         sanitizedFacId,
@@ -164,13 +167,11 @@ async function updateUser(req, res) {
         sanitizedEmail,
         sanitizedUsername,
         sanitizedImage,
-        jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.email ? jwt_dc.email : jwt_dc.user.username,
+        jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.uid,
       ]
     );
 
-    const result = jwt_dc.login_with == "auth-msu" ? await getUserFromAuthMSU(jwt_dc.auth_reg_username) : jwt_dc.email
-      ? await getUserFromGoogle(jwt_dc.email)
-      : await getUserFromUsername(jwt_dc.user.username);
+    const result = jwt_dc.login_with == "auth-msu" ? await getUserFromAuthMSU(jwt_dc.auth_reg_username) : await getUserFromUID(jwt_dc.uid)
     res.json(result);
     return true;
   } catch (error) {
@@ -208,13 +209,13 @@ async function updateFSUser(req, res) {
         sanitizedStdId,
         sanitizedCrId,
         sanitizedStdStartYear,
-        jwt_dc.email ? jwt_dc.email : jwt_dc.user.username,
+        jwt_dc.email ? jwt_dc.email : jwt_dc.username,
       ]
     );
 
     const result = jwt_dc.email
       ? await getUserFromGoogle(jwt_dc.email)
-      : await getUserFromUsername(jwt_dc.user.username);
+      : await getUserFromUsername(jwt_dc.username);
     res.json(result);
     return true;
   } catch (error) {

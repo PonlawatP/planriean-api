@@ -46,9 +46,8 @@ async function getUserFromToken(req, show_passwd = false) {
       );
     } else {
       result = await db.query(
-        `SELECT * FROM user_detail WHERE ${jwt_dc.email ? "email" : "lower(username)"
-        } = lower($1)${!jwt_dc.email ? " OR lower(email) = lower($2)" : ""}`,
-        [...(jwt_dc.email ? [jwt_dc.email] : [jwt_dc.sub, jwt_dc.sub])]
+        `SELECT * FROM user_detail WHERE uid = $1`,
+        [jwt_dc.uid]
       );
     }
 

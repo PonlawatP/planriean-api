@@ -19,11 +19,18 @@ const jwtAuth = new JwtStrategy(jwtOptions, async (payload, done) => {
         [payload.auth_reg_username]
       );
     } else {
-      result = await db.query(
-        `SELECT * FROM user_detail WHERE LOWER(${payload.email ? "email" : "username"
-        }) = LOWER($1)${!payload.email ? " OR LOWER(email) = LOWER($2)" : ""}`,
-        [...(payload.email ? [payload.email] : [payload.sub, payload.sub])]
-      );
+      if (payload.uid) {
+        result = await db.query(
+          `SELECT * FROM user_detail WHERE uid = $1`,
+          [payload.uid]
+        );
+      } else {
+        result = await db.query(
+          `SELECT * FROM user_detail WHERE LOWER(${payload.email ? "email" : "username"
+          }) = LOWER($1)${!payload.email ? " OR LOWER(email) = LOWER($2)" : ""}`,
+          [...(payload.email ? [payload.email] : [payload.sub, payload.sub])]
+        );
+      }
     }
     // console.log("Database Query Result:", result.rows); // Log the query result
     if (result.rowCount > 0) {

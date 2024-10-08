@@ -61,6 +61,7 @@ async function getCoursesetMapping(req, res) {
   try {
     const user = await getUserFromToken(req);
     const { cr_id } = req.params;
+
     if (user != null) {
       const cr = await db.query(
         "SELECT * FROM courseset_detail WHERE cr_id = $1;",

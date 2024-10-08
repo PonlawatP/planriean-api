@@ -99,8 +99,18 @@ const {
   a_editUserRole,
 } = require("./routes/users");
 const { getPlanRestricted, updatePlanRestricted, getPlanSubjectsRestricted, updatePlanSubjectsRestricted } = require("./routes/plan-restrict");
+
+// Enable CORS for all routes with wildcard origin
+const corsOptions = {
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+
 app.use(express.json());
-app.use(cors());
 app.use(bodyParser.json({ limit: "6mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "6mb" }));
 
