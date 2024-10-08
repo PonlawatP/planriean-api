@@ -129,8 +129,6 @@ async function updateUser(req, res) {
     );
     const { uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username, image } = req.body;
 
-    console.log({ uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username, image });
-
     // Sanitize inputs
     const sanitizedUniId = sanitizeInput(uni_id);
     const sanitizedFacId = sanitizeInput(fac_id);

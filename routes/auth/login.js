@@ -143,7 +143,7 @@ async function authFromToken(req, res) {
           std_id: null,
           cr_id: null,
           email: null,
-          image: jwt_dc.picture,
+          image: jwt_dc.image,
           std_name: jwt_dc.name.split(" ")[0],
           std_surname: jwt_dc.name.split(" ")[1],
           phone: null,
@@ -239,6 +239,13 @@ async function sendOTP(email) {
     html: `
       <p>รหัส OTP สำหรับรีเซ็ตรหัสผ่านของคุณคือ</p>
       <h2 style="font-size: 24px; font-weight: bold;">${otp}</h2>
+
+      <p>หากพบปัญหาเพิ่มเติม สามารถติดต่อได้ที่:</p>
+      <ul>
+        <li>Facebook: <a href="https://fb.com/planrieantheplan">fb.com/planrieantheplan</a></li>
+        <li>Email: <a href="mailto:contact@planriean.com">contact@planriean.com</a></li>
+      </ul>
+
       <p>รหัส OTP นี้จะหมดอายุใน 3 นาที</p>
     `
   };
