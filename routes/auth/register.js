@@ -8,6 +8,7 @@ const {
   encryptPassword,
   getUserFromAuthMSU,
 } = require("../../utils/userutil");
+const { createTransporter } = require("../../utils/mailutil");
 
 // Sanitize input function
 function sanitizeInput(input) {
@@ -87,6 +88,27 @@ async function registerUser(req, res) {
       ]
     );
     res != null ? res.json({ success: true }) : () => { };
+
+
+    // Send email with OTP
+    const mailOptions = {
+      from: `"Planriean-NoReply" <${process.env.USER_EMAIL}>`,
+      to: email,
+      subject: 'ยินดีต้อนรับสู่ครอบครัวแพลนเรียน',
+      html: `
+      <h1>ยินดีต้อนรับสู่ครอบครัวแพลนเรียน!</h1>
+      <p>เราดีใจเป็นอย่างยิ่งที่คุณได้เข้าร่วมเป็นส่วนหนึ่งของชุมชนแพลนเรียนของเรา</p>
+      <p>ตอนนี้คุณสามารถเข้าสู่ระบบและเริ่มใช้งานแพลตฟอร์มของเราได้แล้ว</p>
+      <p style="padding-top: 20px;">ขอบคุณที่เลือกใช้แพลนเรียน เราหวังว่าคุณจะมีประสบการณ์ที่ดีกับเรา!</p>
+      <p>ขอให้คุณมีความสุขกับการจัดตารางเรียน และประสบความสำเร็จในการศึกษาตลอดไป!</p>
+      
+      <p style="padding-top: 20px;">ข้อความนี้เป็นข้อความอัตโนมัติ กรุณาอย่าตอบกลับ</p>
+      `
+    };
+
+    const transporter = await createTransporter();
+    await transporter.sendMail(mailOptions);
+
     return true;
   } catch (error) {
     console.log(error);

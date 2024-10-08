@@ -230,21 +230,32 @@ async function sendOTP(email) {
     [hashedOTP, new Date(Date.now() + 3 * 60 * 1000), email]
   );
 
-  // Send email with OTP
-  const mailOptions = {
-    from: `"Planriean" <${process.env.USER_EMAIL}>`,
-    to: email,
-    subject: 'รหัส OTP สำหรับรีเซ็ตรหัสผ่าน',
-    html: `
-      <p>รหัส OTP สำหรับรีเซ็ตรหัสผ่านของคุณคือ</p>
-      <h2 style="font-size: 24px; font-weight: bold;">${otp}</h2>
-      <p>รหัส OTP นี้จะหมดอายุใน 3 นาที</p>
 
-    <p>หากพบปัญหาเพิ่มเติม สามารถติดต่อได้ที่:</p>
-    <ul>
-      <li>Facebook: <a href="https://fb.com/planrieantheplan">fb.com/planrieantheplan</a></li>
-      <li>Email: <a href="mailto:contact@planriean.com">contact@planriean.com</a></li>
-    </ul>
+  // Send email with OTP
+  // const mailOptions = {
+  //   from: `"Planriean-NoReply" <${process.env.USER_EMAIL}>`,
+  //   to: email,
+  //   subject: 'รหัส OTP สำหรับรีเซ็ตรหัสผ่าน',
+  //   html: `
+  //     <p>รหัส OTP สำหรับรีเซ็ตรหัสผ่านของคุณคือ</p>
+  //     <h2 style="font-size: 24px; font-weight: bold;">${otp}</h2>
+  //     <p>รหัส OTP นี้จะหมดอายุใน 3 นาที</p>
+
+  //     <p style="padding-top: 20px;">ข้อความนี้เป็นข้อความอัตโนมัติ กรุณาอย่าตอบกลับ</p>
+  //   `
+  // };
+  const mailOptions = {
+    from: `"Planriean-NoReply" <${process.env.USER_EMAIL}>`,
+    to: email,
+    subject: 'ยินดีต้อนรับสู่ครอบครัวแพลนเรียน',
+    html: `
+    <h1>ยินดีต้อนรับสู่ครอบครัวแพลนเรียน!</h1>
+    <p>เราดีใจเป็นอย่างยิ่งที่คุณได้เข้าร่วมเป็นส่วนหนึ่งของชุมชนแพลนเรียนของเรา</p>
+    <p>ตอนนี้คุณสามารถเข้าสู่ระบบและเริ่มใช้งานแพลตฟอร์มของเราได้แล้ว</p>
+    <p style="padding-top: 20px;">ขอบคุณที่เลือกใช้แพลนเรียน เราหวังว่าคุณจะมีประสบการณ์ที่ดีกับเรา!</p>
+    <p>ขอให้คุณมีความสุขกับการจัดตารางเรียน และประสบความสำเร็จในการศึกษาตลอดไป!</p>
+    
+    <p style="padding-top: 20px;">ข้อความนี้เป็นข้อความอัตโนมัติ กรุณาอย่าตอบกลับ</p>
     `
   };
 
