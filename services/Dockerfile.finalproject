@@ -32,7 +32,7 @@ FROM python:3.9-slim
 WORKDIR /subj_api_app/dist
 
 # Copy the executable from the first stage
-COPY --from=builder /subj_api_app/pg_config_all.ini /subj_api_app/dist/pg_config.ini
+COPY --from=builder /subj_api_app/pg_config_finalproject.ini /subj_api_app/dist/pg_config.ini
 COPY --from=builder /subj_api_app/dist/planriean-msuj .
 
 # Set the entrypoint to the executable

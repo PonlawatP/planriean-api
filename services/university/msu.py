@@ -566,6 +566,7 @@ class MSU:
         # request web page with post method
         response = requests.post('https://reg.msu.ac.th/registrar/class_info_1.asp', headers=headers, data=f_data)
 
+
         # check status
         if response.status_code != 200:
             print(f"Error: {response.status_code}")
@@ -588,6 +589,10 @@ class MSU:
         # print(rows)
         bulk_sql_1 = []
         bulk_sql_2 = []
+
+        # print(f_data)
+        # print(rows)
+
         for row in rows:
             cells = row.find_all('td')
             seat_available = int(cells[6].text.strip())
@@ -697,7 +702,7 @@ class MSU:
                     ;
                 """
                 unique_data = list({(d[0], d[1], d[2], d[8], d[3], d[12]): d for d in bulk_sql_1}.values())
-                print(unique_data)
+                # print(unique_data)
                 execute_values(cur, query, unique_data)
 
             query = """

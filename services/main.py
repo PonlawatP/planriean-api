@@ -76,19 +76,18 @@ async def run_get_all_subjects(year = 2567, semester = 1):
     m1res = config['scrap'].get('courses').split(',')
     start_time = time.time()
 
-
     # print("get subjects data")  # Output: 01
     # print("GE")  # Output: 01
     # MSU.scrap_courses_data(year=year, semester=semester, coursecode='00*')
     tasks = []
     # tasks.append((year, semester, None, '00*'))
-    tasks.append((year, semester, None, f'0505101', isRegisScrapRunning == False))
+    # tasks.append((year, semester, None, f'0505101', isRegisScrapRunning == False))
 
-    # for i in m1res:
-    #     formatted_number = str(i).zfill(2)
-    #     tasks.append((year, semester, None, f'{formatted_number}*', isRegisScrapRunning == False))
-        # print(formatted_number)  # Output: 01
-        # MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
+    for i in m1res:
+        formatted_number = str(i).zfill(2)
+        tasks.append((year, semester, None, f'{formatted_number}*', isRegisScrapRunning == False))
+        print('\rScaping data faculty id: '+formatted_number, end='')  # Output: 01
+        MSU.scrap_courses_data(year=year, semester=semester, coursecode=f'{formatted_number}*')
         # m2res.append((i, MSU.scrap_courseset_list(facultyid=i)))
 
     ctx = multiprocessing.get_context('spawn')
