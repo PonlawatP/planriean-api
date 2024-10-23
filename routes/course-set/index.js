@@ -485,18 +485,18 @@ async function a_addCoursesetDetail(req, res) {
     if (insertResult.rowCount > 0) {
       res.status(201).json({
         success: true,
-        message: "Courseset Detail added successfully",
+        message: "เพิ่มหลักสูตรแล้ว",
       });
     } else {
       res
         .status(500)
-        .json({ success: false, message: "Failed to add Courseset Detail" });
+        .json({ success: false, message: "เพิ่มหลักสูตรไม่ได้" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to add Courseset Detail" });
+      .json({ success: false, message: "เพิ่มหลักสูตรไม่ได้" });
   }
 }
 
@@ -514,18 +514,18 @@ async function a_removeCoursesetDetail(req, res) {
     if (deleteResult.rowCount > 0) {
       res.status(200).json({
         success: true,
-        message: "Courseset Detail removed successfully",
+        message: "ลบหลักสูตรแล้ว",
       });
     } else {
       res
         .status(404)
-        .json({ success: false, message: "Courseset Detail not found" });
+        .json({ success: false, message: "ไม่มีหลักสูตร" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to remove Courseset Detail" });
+      .json({ success: false, message: "ลบหลักสูตรไม่ได้" });
   }
 }
 
@@ -569,18 +569,18 @@ async function a_editCoursesetDetail(req, res) {
     if (updateResult.rowCount > 0) {
       res.status(200).json({
         success: true,
-        message: "Courseset Detail updated successfully",
+        message: "อัพเดตหลักสูตรแล้ว",
       });
     } else {
       res
         .status(404)
-        .json({ success: false, message: "Courseset Detail not found" });
+        .json({ success: false, message: "ไม่มีหลักสูตร" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to update Courseset Detail" });
+      .json({ success: false, message: "อัพเดตหลักสูตรไม่ได้" });
   }
 }
 // Course set header
@@ -625,18 +625,18 @@ async function a_addCoursesetHeader(req, res) {
     if (insertResult.rowCount > 0) {
       res.status(201).json({
         success: true,
-        message: "Courseset Header added successfully",
+        message: "เพิ่มหัวข้อหลักสูตรแล้ว",
       });
     } else {
       res
         .status(500)
-        .json({ success: false, message: "Failed to add Courseset Header" });
+        .json({ success: false, message: "เพิ่มหัวข้อหลักสูตรไม่ได้" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to add Courseset Header" });
+      .json({ success: false, message: "เพิ่มหัวข้อหลักสูตรไม่ได้" });
   }
 }
 
@@ -654,18 +654,18 @@ async function a_removeCoursesetHeader(req, res) {
     if (deleteResult.rowCount > 0) {
       res.status(200).json({
         success: true,
-        message: "Courseset Header removed successfully",
+        message: "ลบหัวข้อหลักสูตรแล้ว",
       });
     } else {
       res
         .status(404)
-        .json({ success: false, message: "Courseset Header not found" });
+        .json({ success: false, message: "ไม่มีหัวข้อหลักสูตร" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to remove Courseset Header" });
+      .json({ success: false, message: "ลบหัวข้อหลักสูตรไม่ได้" });
   }
 }
 
@@ -693,7 +693,7 @@ async function a_editCoursesetHeader(req, res) {
     if (existingHeader.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Courseset Header not found"
+        message: "ไม่มีหัวข้อหลักสูตร"
       });
     }
 
@@ -721,18 +721,18 @@ async function a_editCoursesetHeader(req, res) {
     if (updateResult.rowCount > 0) {
       res.status(200).json({
         success: true,
-        message: "Courseset Header updated successfully",
+        message: "อัพเดตหัวข้อหลักสูตรแล้ว",
       });
     } else {
       res
         .status(404)
-        .json({ success: false, message: "Courseset Header not found" });
+        .json({ success: false, message: "ไม่มีหัวข้อหลักสูตร" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to update Courseset Header" });
+      .json({ success: false, message: "อัพเดตหัวข้อหลักสูตรไม่ได้" });
   }
 }
 // Course set subject
@@ -760,7 +760,7 @@ async function a_addCoursesetSubject(req, res) {
     if (existingSubject.rowCount > 0) {
       return res.status(400).json({
         success: false,
-        message: "Courseset Subject already exists",
+        message: "มีวิชานี้ในหลักสูตรอยู่แล้ว",
       });
     }
 
@@ -788,18 +788,18 @@ async function a_addCoursesetSubject(req, res) {
     if (insertResult.rowCount > 0) {
       res.status(201).json({
         success: true,
-        message: "Courseset Subject added successfully",
+        message: "เพิ่มวิชาในหลักสูตรแล้ว",
       });
     } else {
       res
         .status(500)
-        .json({ success: false, message: "Failed to add Courseset Subject" });
+        .json({ success: false, message: "เพิ่มวิชาในหลักสูตรไม่ได้" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to add Courseset Subject" });
+      .json({ success: false, message: "เพิ่มวิชาในหลักสูตรไม่ได้" });
   }
 }
 
@@ -817,18 +817,18 @@ async function a_removeCoursesetSubject(req, res) {
     if (deleteResult.rowCount > 0) {
       res.status(200).json({
         success: true,
-        message: "Courseset Subject removed successfully",
+        message: "ลบวิชาในหลักสูตรแล้ว",
       });
     } else {
       res
         .status(404)
-        .json({ success: false, message: "Courseset Subject not found" });
+        .json({ success: false, message: "ไม่มีวิชาในหลักสูตร" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to remove Courseset Subject" });
+      .json({ success: false, message: "ลบวิชาในหลักสูตรไม่ได้" });
   }
 }
 
@@ -867,18 +867,18 @@ async function a_editCoursesetSubject(req, res) {
     if (updateResult.rowCount > 0) {
       res.status(200).json({
         success: true,
-        message: "Courseset Subject updated successfully",
+        message: "อัพเดตวิชาในหลักสูตรแล้ว",
       });
     } else {
       res
         .status(404)
-        .json({ success: false, message: "Courseset Subject not found" });
+        .json({ success: false, message: "ไม่มีวิชาในหลักสูตร" });
     }
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to update Courseset Subject" });
+      .json({ success: false, message: "อัพเดตวิชาในหลักสูตรไม่ได้" });
   }
 }
 
@@ -924,13 +924,13 @@ async function a_editCoursesetMapping(req, res) {
 
     res.status(200).json({
       success: true,
-      message: "Courseset Mapping updated successfully",
+      message: "อัพเดตการจัดวิชาในหลักสูตรแล้ว",
     });
   } catch (err) {
     console.error(err);
     res
       .status(500)
-      .json({ success: false, message: "Failed to update Courseset Mapping" });
+      .json({ success: false, message: "อัพเดตการจัดวิชาในหลักสูตรไม่ได้" });
   }
 }
 

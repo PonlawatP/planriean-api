@@ -94,7 +94,7 @@ async function registerUser(req, res) {
       // Send email with OTP
       const mailOptions = {
         from: `"Planriean-NoReply" <${process.env.USER_EMAIL}>`,
-        to: email,
+        to: sanitizedEmail,
         subject: 'ยินดีต้อนรับสู่ครอบครัวแพลนเรียน',
         html: `
       <h1>ยินดีต้อนรับสู่ครอบครัวแพลนเรียน!</h1>
@@ -116,7 +116,7 @@ async function registerUser(req, res) {
     res != null
       ? res
         .status(400)
-        .json({ success: false, error: error.code, msg: error.detail })
+        .json({ success: false, error: error?.code || -1, msg: error?.detail || "Unknown error" })
       : () => { };
     return false;
   }
