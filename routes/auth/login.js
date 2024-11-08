@@ -250,8 +250,12 @@ async function sendOTP(email) {
     `
   };
 
-  const transporter = await createTransporter();
-  await transporter.sendMail(mailOptions);
+  try {
+    const transporter = await createTransporter();
+    await transporter.sendMail(mailOptions);
+  } catch (err) {
+    console.error("Error sending OTP email:", err);
+  }
 }
 
 async function verifyOTP(req, res) {

@@ -1,5 +1,71 @@
 const db = require("../../db");
 
+// Create a cache variable at module level
+
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+const COURSE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+let subjectCache = null;
+let lastCacheTime = null;
+let courseCache = null;
+let lastCourseCacheTime = null;
+
+async function getSubjects() {
+  // Check if cache exists and is still valid
+  if (subjectCache && lastCacheTime && (Date.now() - lastCacheTime < CACHE_DURATION)) {
+    return subjectCache;
+  }
+
+  // If no cache or expired, run the query
+  const result = await db.query(`
+        SELECT DISTINCT ON (suj_real_id) suj_real_id, suj_name_th
+        FROM courseset_subject
+        ORDER BY suj_real_id
+    `);
+
+  // Store in cache
+  subjectCache = result.rows;
+  lastCacheTime = Date.now();
+
+  return subjectCache;
+}
+async function getCoursesData(data) {
+  // Check if cache exists and is still valid
+  if (courseCache && lastCourseCacheTime && (Date.now() - lastCourseCacheTime < COURSE_CACHE_DURATION)) {
+    return courseCache;
+  }
+
+  // If no cache or expired, run the query
+  const result = await db.query(
+    `SELECT
+    course_detail.uni_id,
+    course_detail.YEAR,
+    course_detail.semester,
+    course_detail.code,
+    course_detail.name_en,
+    course_detail.note,
+    course_detail.credit,
+    course_detail.TIME,
+    course_detail.sec,
+    course_detail.lecturer,
+    course_detail.exam_mid,
+    course_detail.exam_final,
+    course_detail.cr_id,
+    course_detail.suj_real_code
+  FROM
+    course_detail
+  WHERE
+    year = $1 AND semester = $2`,
+    // [year, semester, "12%"]
+    data
+  )
+
+  // Store in cache
+  courseCache = result.rows;
+  lastCourseCacheTime = Date.now();
+
+  return courseCache;
+}
+
 async function getCourses(req, res) {
   try {
     const result = await db.query("SELECT * FROM course_detail");
@@ -65,20 +131,67 @@ async function getCoursesSpecific(req, res) {
 
     const data_updated = result_updated.rows[0].formatted_date;
 
+    // console.time('getCoursesData');
+    const coursesData = await getCoursesData([
+      year,
+      semester
+    ]);
+    // console.timeEnd('getCoursesData');
+    // console.time('getSubjects');
+
     const result = await db.query(
-      `SELECT * FROM course_detail LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id WHERE year = $1 AND semester = $2 AND code SIMILAR TO $3`,
+      `SELECT
+      	course_detail.suj_real_code,
+        course_detail.sec,
+        course_seat.seat_remain,
+        course_seat.seat_available 
+      FROM
+        course_detail
+        LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id
+      WHERE
+        year = $1 AND semester = $2 AND code SIMILAR TO $3`,
       // [year, semester, "12%"]
       [
         year,
         semester,
         (major_groups == "" ? "" : major_groups + "|") +
-          (searchData.code.length > 0
-            ? searchData.code.join("|")
-            : searchData.type.join("|").replaceAll("*", "%")),
+        (searchData.code.length > 0
+          ? searchData.code.join("|")
+          : searchData.type.join("|").replaceAll("*", "%")),
       ]
     );
-    const data = result.rows;
-    // console.log(data);
+    // console.timeEnd('getSubjects');
+    const subjects = await getSubjects();
+    const courses = result.rows;
+
+    // Map through results and inject suj_name_th
+    // console.time('map');
+    // Create hash maps for faster lookups
+    const subjectsMap = subjects.reduce((acc, sub) => {
+      acc[sub.suj_real_id] = sub.suj_name_th;
+      return acc;
+    }, {});
+
+    const coursesMap = courses.reduce((acc, course) => {
+      const key = `${course.suj_real_code}_${course.sec}`;
+      acc[key] = course;
+      return acc;
+    }, {});
+
+    // Use hash maps for O(1) lookups instead of find()
+    const enhancedResults = coursesData.map(row => {
+      const courseKey = `${row.suj_real_code}_${row.sec}`;
+      const matchingCourse = coursesMap[courseKey];
+
+      return matchingCourse ? {
+        ...row,
+        name_th: subjectsMap[row.suj_real_code] || null,
+        ...matchingCourse
+      } : null;
+    }).filter(r => r != null);
+    // console.timeEnd('map');
+
+    // console.log(enhancedResults);
     // console.log(
     //   searchData.code.length > 0
     //     ? searchData.code.join("|")
@@ -86,7 +199,7 @@ async function getCoursesSpecific(req, res) {
     // );
 
     // TODO: convert into new code
-    const searchResults = data
+    const searchResults = enhancedResults
       .filter((item) => {
         return (
           // (searchData.code.includes(item.code) ||
@@ -95,7 +208,7 @@ async function getCoursesSpecific(req, res) {
             searchData.date.length == 0) &&
           (searchData.master.length == 0 ||
             searchData.master.filter((m) => item.lecturer.includes(m)).length >
-              0) &&
+            0) &&
           // if has more than 1 day it will check iterable
           (item.time.split(";").filter((fitem) => {
             // time filter had been ranged

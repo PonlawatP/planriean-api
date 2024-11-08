@@ -105,8 +105,12 @@ async function registerUser(req, res) {
       `
       };
 
-      const transporter = await createTransporter();
-      await transporter.sendMail(mailOptions);
+      try {
+        const transporter = await createTransporter();
+        await transporter.sendMail(mailOptions);
+      } catch (err) {
+        console.error("Error sending Greeting email:", err);
+      }
     }
 
     return true;
