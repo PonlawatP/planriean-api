@@ -29,5 +29,4 @@ node_modules*
 /node_modules
 /services/build
 /services/dist
-services/pg_config.ini
-/node_modules
+/services/university/__pycache__
