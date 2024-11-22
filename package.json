@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "bun --watch index.js",
-    "build": "bun build index.js --outdir ./out --target node",
-    "start": "bun index.js",
-    "start-prod": "bun ./out/index.js",
+    "dev": "bun --watch src/index.js",
+    "build": "tsc",
+    "start": "bun dist/index.js",
+    "start-prod": "bun ./out/dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

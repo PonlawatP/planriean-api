@@ -4,7 +4,7 @@ const bodyParser = require("body-parser");
 const express = require("express");
 const app = express();
 const fs = require("fs");
-var pjson = require("./package.json");
+var pjson = require("../package.json");
 const redis = require("redis");
 
 const port = process.env.PORT || 3030;
@@ -400,72 +400,3 @@ app.listen(port, "0.0.0.0", async () => {
   console.log("Redis Host: " + process.env.REDIS_HOST);
   await checkRedisConnection();
 });
-
-// // Run a schedule
-// // [TODO: it will be another a service to prevent script interrupted]
-// // Check has file
-// // Add your code here to run the schedule
-// const cron = require('node-cron');
-// const path = require('path');
-// const { exec } = require('child_process');
-// var ready = false;
-//
-// if (!fs.existsSync(dataALLPath)) {
-//    console.error(`File ${dataALLPath} does not exist`);
-//    exec(`cd ${path.dirname(__filename)} && python3 ./main.py`, (error, stdout, stderr) => {
-//       if (error) {
-//          console.error(`exec error: ${error}`);
-//          return;
-//       }
-//       init()
-//    });
-// } else {
-//    init()
-// }
-// console.log("Running schedule...");
-// // Run the Python file
-// const args = require('minimist')(process.argv.slice(2));
-// const sec = args.t || 10;
-// var seconds = sec;
-// var count = 0;
-// const scheduledFunction = () => {
-//    if (!ready) return;
-
-//    if (cache_updated === "none" && seconds === sec) {
-//       seconds = 0;
-//    }
-
-//    if (seconds > 0) {
-//       process.stdout.write(`\x1b[K\x1b[90mRequested done on\x1b[0m ${cache_updated} \x1b[90m(${count}) \x1b[33m| \x1b[37m${seconds}\x1b[33m's left...\r`);
-//       seconds--;
-//       return
-//    } else if (seconds == 0) {
-//       seconds = -1;
-
-//       if (cache_updated === "none") {
-//          process.stdout.write(`\x1b[K\x1b[90mFirst Running \x1b[33m| \x1b[32mUpdating...\r`);
-//       } else {
-//          process.stdout.write(`\x1b[K\x1b[90mRequested done on\x1b[0m ${cache_updated} \x1b[33m| \x1b[90m${count} \x1b[33m| \x1b[32mUpdating...\r`);
-//       }
-
-//       exec(`cd ${path.dirname(__filename)} && python3 ./main.py`, (error, stdout, stderr) => {
-//          if (error) {
-//             console.error(`exec error: ${error}`);
-//             return;
-//          }
-//          cache_updated = new Date().toLocaleDateString('th-TH', {
-//             year: '2-digit',
-//             month: '2-digit',
-//             day: '2-digit',
-//             hour: '2-digit',
-//             minute: '2-digit',
-//             second: '2-digit',
-//             hour12: false
-//          }).replace(',', '');
-
-//          seconds = sec;
-//          count++;
-//       });
-//    }
-// }
-// cron.schedule('* * * * * *', scheduledFunction);

@@ -30,3 +30,4 @@ node_modules*
 /services/build
 /services/dist
 /services/university/__pycache__
+/dist
