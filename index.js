@@ -5,9 +5,12 @@ const express = require("express");
 const app = express();
 const fs = require("fs");
 var pjson = require("./package.json");
+const redis = require("redis");
+
 const port = process.env.PORT || 3030;
 const { home } = require("./routes");
 var cors = require("cors");
+
 const { getCourses, getCoursesSpecific } = require("./routes/course");
 const {
   authToken,
@@ -99,6 +102,7 @@ const {
   a_editUserRole,
 } = require("./routes/users");
 const { getPlanRestricted, updatePlanRestricted, getPlanSubjectsRestricted, updatePlanSubjectsRestricted } = require("./routes/plan-restrict");
+const { Pool } = require('pg');
 
 // Enable CORS for all routes with wildcard origin
 const corsOptions = {
@@ -139,12 +143,18 @@ app.delete("/plan/view/:plan_id", requireJWTAuth, deletePlanUser);
 app.get("/plan/view/:plan_id/subject", requireJWTAuth, getPlanSubjectsUser);
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser);
 
+// v.2 old api - deprecated
 app.get("/course", getCourses);
 app.post("/course/:year/:semester", getCoursesSpecific);
 app.get("/course/:year/:semester/group", getSubjectGroups);
 app.get("/course/:year/:semester/lecturer", getLectureGroups);
+// v.2.0.1 new api
+app.post("/university/:uni_id/course/:year/:semester", getCoursesSpecific);
+app.get("/university/:uni_id/course/:year/:semester/group", getSubjectGroups);
+app.get("/university/:uni_id/course/:year/:semester/lecturer", getLectureGroups);
 app.get("/university/:uni_id/course-set/:cr_id", getCoursesetDetail);
 app.get("/university/:uni_id/course-set/:cr_id/map", getCoursesetMapping);
+
 
 app.get("/university/", getUniversityList);
 app.get("/university/:uni_id", getUniversityDetail);
@@ -338,11 +348,57 @@ app.put("/plan-restrict/view/:restgrp_id/subject", requireJWTAuth, updatePlanSub
 
 /** end admin section */
 
-app.listen(port, "0.0.0.0", () => {
+async function checkDatabaseConnection() {
+  const pool = new Pool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_SQL_USER,
+    password: process.env.DB_SQL_PASS,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 5432
+  });
+
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT NOW()');
+    client.release();
+    console.log('\x1b[32m%s\x1b[0m', 'Database connection successful');
+    return true;
+  } catch (err) {
+    console.error('\x1b[31m%s\x1b[0m', 'Database connection failed:', err.message);
+    return false;
+  }
+}
+
+async function checkRedisConnection() {
+  try {
+    const client = redis.createClient({
+      url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+      password: process.env.REDIS_PASS
+    });
+
+    // Connect to Redis before pinging
+    await client.connect();
+
+    await client.ping();
+    console.log('\x1b[32m%s\x1b[0m', 'Redis connection successful');
+
+    // Cleanup: disconnect the client
+    await client.disconnect();
+    return true;
+  } catch (err) {
+    console.error('\x1b[31m%s\x1b[0m', 'Redis connection failed:', err.message);
+    return false;
+  }
+}
+
+app.listen(port, "0.0.0.0", async () => {
   console.log("Planriean Subjects Service");
   console.log("Version: " + pjson.version);
   console.log("Port: " + port);
-  // ready = true;
+  console.log("DB Host: " + process.env.DB_HOST);
+  await checkDatabaseConnection();
+  console.log("Redis Host: " + process.env.REDIS_HOST);
+  await checkRedisConnection();
 });
 
 // // Run a schedule

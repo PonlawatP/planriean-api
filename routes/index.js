@@ -1,7 +1,8 @@
+const version = require("../package.json").version;
 const home = (req, res) => {
     const data = {
         service: 'planriean-subjects-service',
-        version: 2,
+        version: version,
         status: "running"
     }
     res.json(data);

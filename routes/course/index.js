@@ -1,5 +1,25 @@
 const db = require("../../db");
 
+const Redis = require('ioredis');
+const redis = new Redis({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: process.env.REDIS_PORT || 6379,
+  password: process.env.REDIS_PASS,  // Changed from REDIS_PASSWORD to REDIS_PASS
+  retryStrategy: (times) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  maxRetriesPerRequest: 3,
+  enableReadyCheck: true,
+  reconnectOnError: function (err) {
+    const targetError = 'READONLY';
+    if (err.message.includes(targetError)) {
+      return true;
+    }
+    return false;
+  }
+});
+
 // Create a cache variable at module level
 
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -54,7 +74,7 @@ async function getCoursesData(data) {
   FROM
     course_detail
   WHERE
-    year = $1 AND semester = $2`,
+    uni_id = $1 AND year = $2 AND semester = $3`,
     // [year, semester, "12%"]
     data
   )
@@ -76,9 +96,12 @@ async function getCourses(req, res) {
   }
 }
 
+// NOTED: temporary cache for user search data only
+// let lastDataUpdatedCacheTime = null;
+
 async function getCoursesSpecific(req, res) {
   try {
-    const { year, semester } = req.params;
+    const { uni_id = 1, year, semester } = req.params;
     let searchData = req.body;
 
     if (searchData.type.length == 0) {
@@ -122,21 +145,35 @@ async function getCoursesSpecific(req, res) {
 
     // console.log(major_groups);
     const result_updated = await db.query(
-      `SELECT to_char(
-          refresh_updated_at AT TIME ZONE 'UTC' + interval '543 years',
+      `SELECT LOWER(uni_key) as uni_key, to_char(
+          refresh_updated_at + interval '543 years',
           'DD/MM/YY HH24:MI:SS'
-      ) AS formatted_date FROM university_detail WHERE LOWER(uni_key) = LOWER($1)`,
-      ["msu"]
+      ) AS formatted_date FROM university_detail WHERE uni_id = $1`,
+      [uni_id]
     );
 
     const data_updated = result_updated.rows[0].formatted_date;
+    const uni_key = result_updated.rows[0].uni_key;
+
+    const searchData_ = `planriean-${uni_key}:subjs:${year}-${semester}:${searchData.type.join(",")}-${searchData.code.join(",")}-${searchData.date.join(",")}-${searchData.master.join(",")}-${searchData.time}`;
+    const lastDataUpdatedKey = `planriean-${uni_key}:subjs:dataUpdated`;
+    const lastDataUpdatedCacheTime = await redis.get(lastDataUpdatedKey);
+
+    if (lastDataUpdatedCacheTime == data_updated) {
+      const cachedData = await redis.get(searchData_);
+      if (cachedData) {
+        return res.json({ cached: true, updated: data_updated, subjects: JSON.parse(cachedData) });
+      }
+    }
 
     // console.time('getCoursesData');
     const coursesData = await getCoursesData([
+      uni_id,
       year,
       semester
     ]);
     // console.timeEnd('getCoursesData');
+
     // console.time('getSubjects');
 
     const result = await db.query(
@@ -149,9 +186,10 @@ async function getCoursesSpecific(req, res) {
         course_detail
         LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id
       WHERE
-        year = $1 AND semester = $2 AND code SIMILAR TO $3`,
+        uni_id = $1 AND year = $2 AND semester = $3 AND code SIMILAR TO $4`,
       // [year, semester, "12%"]
       [
+        uni_id,
         year,
         semester,
         (major_groups == "" ? "" : major_groups + "|") +
@@ -234,10 +272,21 @@ async function getCoursesSpecific(req, res) {
       })
       .map((r) => {
         // console.log(r);
-        return { ...r, "cr_id(1)": undefined };
+        delete r["cr_id(1)"];
+        return r;
       });
 
-    res.json({ updated: data_updated, subjects: searchResults });
+    try {
+      const pipeline = redis.pipeline();
+
+      pipeline.set(searchData_, JSON.stringify(searchResults), 'EX', 30);
+      pipeline.set(lastDataUpdatedKey, data_updated);
+      await pipeline.exec();
+    } catch (redisError) {
+      console.error('Redis pipeline failed:', redisError);
+    }
+
+    res.json({ cached: false, updated: data_updated, subjects: searchResults });
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal Server Error");

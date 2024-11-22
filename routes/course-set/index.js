@@ -297,38 +297,42 @@ async function getCoursesetSubjectRestricted(req) {
 
 async function getSubjectGroups(req, res) {
   try {
-    const { year, semester } = req.params;
+    const { uni_id = 1, year, semester } = req.params;
+    const { type = "normal", no_subjects } = req.query;
     // console.log(year, semester);
     // return;
     // if (user != null) {
     let crs = await db.query(
-      "SELECT fac_id, fac_key, fac_name_en, fac_name_th FROM university_faculty WHERE uni_id = $1 ORDER BY fac_id;",
-      [1]
+      "SELECT fac_id, fac_key, fac_name_en, fac_name_th FROM university_faculty WHERE uni_id = $1 AND enabled = TRUE ORDER BY fac_id;",
+      [uni_id]
     );
     const crs_sujs = await db.query(
       `
-      SELECT 
-          course_detail.code, 
-          course_detail.name_en, 
-          courseset_subject.suj_name_th as name_th
-      FROM 
-          course_detail 
-      LEFT JOIN 
-          courseset_subject 
-      ON 
-          courseset_subject.suj_real_id = course_detail.suj_real_code 
-      WHERE 
-          course_detail.year = $1 
-          AND course_detail.semester = $2 
-          AND course_detail.uni_id = $3 
-      GROUP BY
-          course_detail.code,
-          course_detail.name_en,
-          courseset_subject.suj_name_th 
-      ORDER BY 
-          course_detail.code ASC;
+        SELECT
+            course_detail.code,  
+            course_detail.name_en, 
+            (
+                SELECT suj_name_th 
+                FROM courseset_subject 
+                WHERE suj_real_id = course_detail.suj_real_code 
+                LIMIT 1
+            ) as name_th
+            ,CAST(COUNT(sec) AS INTEGER) as total_sec
+            ${type == "review" ? ",CAST((SELECT COUNT(*) FROM review_entries WHERE suj_real_code = course_detail.suj_real_code) AS INTEGER) as total_review, course_detail.suj_real_code" : ""}
+        FROM 
+            course_detail 
+        WHERE 
+            course_detail.year = $1 
+            AND course_detail.semester = $2 
+            AND course_detail.uni_id = $3 
+        GROUP BY
+            code,
+            name_en,
+            suj_real_code
+        ORDER BY 
+            course_detail.code ASC;
       `,
-      [year, semester, 1]
+      [year, semester, uni_id]
     );
     // console.log(crs.rows);
     // console.log(crs_sujs.rows);
@@ -343,17 +347,21 @@ async function getSubjectGroups(req, res) {
                 ...t,
                 global: false,
                 startsWith: undefined,
-                subjects: crs_sujs.rows.filter((s) =>
-                  s.code.startsWith(String(t.startsWith).padStart(2, "0"))
-                ),
+                subjects: no_subjects
+                  ? undefined
+                  : crs_sujs.rows.filter((s) =>
+                    s.code.startsWith(String(t.startsWith).padStart(2, "0"))
+                  ),
               };
             })
             : [
               {
                 global: true,
-                subjects: crs_sujs.rows.filter((s) =>
-                  s.code.startsWith(String(m.fac_id).padStart(2, "0"))
-                ),
+                subjects: no_subjects
+                  ? undefined
+                  : crs_sujs.rows.filter((s) =>
+                    s.code.startsWith(String(m.fac_id).padStart(2, "0"))
+                  ),
               },
               // {
               //   header: "หมวดหมู่ที่ 1",
@@ -404,13 +412,13 @@ async function getSubjectGroups(req, res) {
 
 async function getLectureGroups(req, res) {
   try {
-    const { year, semester } = req.params;
+    const { uni_id = 1, year, semester } = req.params;
     // console.log(year, semester);
     // return;
     // if (user != null) {
     let crs_ltrs = await db.query(
       "SELECT lecturer from course_detail WHERE year = $1 and semester = $2 AND uni_id = $3 GROUP BY lecturer;",
-      [year, semester, 1]
+      [year, semester, uni_id]
     );
 
     crs_ltrs = crs_ltrs.rows
