@@ -324,6 +324,246 @@ class MSU:
         run('th')
         # run('en')
 
+    # function that moveing pre-req subject data in moment of accident forget to re-defined fucking database server
+    # def fucking_update_prerequisite():
+    #     cur = con.cursor()
+    #     query = """
+    #     SELECT DISTINCT suj_real_id, suj_pre_req
+    #     FROM courseset_subject 
+    #     WHERE suj_pre_req_updated is TRUE 
+    #     AND suj_real_id is not null
+    #     """
+    #     cur.execute(query)
+    #     subjects_to_update = cur.fetchall()
+        
+    #     total_subjects = len(subjects_to_update)
+    #     print(f"Found {total_subjects} subjects to update.")
+
+    #     # Create a new database connection using database_main config
+    #     config_main = configparser.ConfigParser()
+    #     config_main.read('pg_config.ini')
+        
+    #     sqluser_main = config_main['database_main'].get('sqluser')
+    #     sqlpass_main = config_main['database_main'].get('sqlpass')
+    #     dbname_main = config_main['database_main'].get('dbname')
+    #     schema_name_main = config_main['database_main'].get('schema_name')
+    #     host_main = config_main['database_main'].get('host')
+
+    #     query_schema_main = 'SET search_path to ' + schema_name_main + ';'
+
+    #     # Connect to the main database
+    #     con_main = psycopg2.connect(dbname=dbname_main, user=sqluser_main, password=sqlpass_main, host=host_main)
+    #     cur_main = con_main.cursor()
+    #     cur_main.execute(query_schema_main)
+
+    #     def update_prerequisite(suj_real_id, suj_pre_req):
+    #         update_query = """
+    #         UPDATE courseset_subject
+    #         SET suj_pre_req = %s,
+    #             suj_pre_req_updated = TRUE
+    #         WHERE suj_real_id = %s
+    #         """
+    #         cur_main.execute(update_query, (suj_pre_req, suj_real_id))
+    #         con_main.commit()
+        
+    #     for index, (suj_real_id,suj_pre_req) in enumerate(subjects_to_update, 1):
+    #         print(f"Updating subject {index}/{total_subjects}: {suj_real_id} -> {suj_pre_req}")
+
+    #         update_prerequisite(suj_real_id, suj_pre_req)
+    #         # prereq_codes = run(suj_real_code=suj_real_id)
+            
+    #         # if prereq_codes:
+    #         #     update_query = """
+    #         #     UPDATE courseset_subject
+    #         #     SET suj_pre_req = %s,
+    #         #         suj_pre_req_updated = TRUE
+    #         #     WHERE suj_real_id = %s
+    #         #     """
+    #         #     cur.execute(update_query, (prereq_codes, suj_real_id))
+    #         #     con.commit()
+    #         #     print(f"Updated prerequisite for {suj_real_id}: {prereq_codes}")
+    #         # else:
+    #         #     print(f"No prerequisites found for {suj_real_id}")
+            
+    #         # Add a small delay to avoid overwhelming the server
+    #         # time.sleep(1)
+        
+    #     cur.close()
+    #     print("Prerequisite update completed.")
+
+    # scrap_subject_prerequisite
+    # ดึงข้อมูลแผนหลักสูตรมาเก็บไว้
+    # ประกอบด้วย
+        # - หัวข้ของกล่มรายวิชาแต่ละหลักสูตร (สามารถซ้อนกันได้) : เก็บใน courseset_detail
+            # - หน่วยกิตรวมของกลุ่มรายวิชา : เก็บใน courseset_detail
+            # - ข้อมูลรายวิชาในกลุ่มของรายวิชาของหลักสูตร : เก็บใน courseset_subject
+    # params
+        # - facultyid = 12
+            # รหัสประจำค���ะ เช่น คณะวิทยาการสารสนเทศ = 12
+        # - courseset_id = 12
+            # รหัสหลักสูตรของภาควิชา เช่น หลักสูตรวิทยาการคอมพิวเตอร์ ปี 63 = 1126302
+    def scrap_subject_prerequisite():
+        uni_id = MSU.getUniversityID("MSU")
+        
+        def run(lang = 'th', suj_real_code = '0', old_attempts = 0):
+            try:
+                # request web page with post method
+                response = requests.post(f'https://reg.msu.ac.th/registrar/program_info_2.asp?courseid={suj_real_code}', headers=headers)
+                # check status
+                if response.status_code != 200:
+                    print(f"Error: {response.status_code}")
+                    return
+                
+                cur = con.cursor()
+
+                # BeautifulSoup
+                resp = BeautifulSoup(response.content, 'html5lib')
+
+                # select table by CSS selector
+                soup = resp.select('body > div.contenttive > div > div.main > div > table')[0]
+                tables = soup.select('tr[valign="TOP"] > td')
+                last_table = tables[-1] if tables else None
+
+                # select course description
+                description_th = None
+                description_en = None
+                soup_description = resp.select('body > div.contenttive > div > div.main > div > table:last-child > tbody > tr > td:nth-child(2)')[0]
+                if soup_description:
+                    # Split content by <hr/> to separate Thai and English descriptions
+                    descriptions = str(soup_description).split('<hr/>')
+                    if len(descriptions) >= 1:
+                        # Extract Thai description (remove Course Description header and clean up)
+                        description_th = str(descriptions[0]).split('<td width="600"><font color="#4040AA"><b>Course Description</b></font><br/>')[1]
+                        description_th = BeautifulSoup(description_th, 'html.parser')
+                        # Remove all trailing <br/> tags at the end of the text
+                        description_th = re.sub(r'(?:<br/>)+\s*$', '', str(description_th).strip())
+                        description_th = re.sub(r'\s+', ' ', description_th)
+                        # print(f"suj_real_code: {suj_real_code} | description_th: '{description_th}'")
+                    if len(descriptions) >= 2:
+                        # Extract English description
+                        description_en = BeautifulSoup(descriptions[1], 'html.parser')
+                        description_en = re.sub(r'(?:<br/>)+\s*$', '', str(description_en).strip())
+                        description_en = re.sub(r'\s+', ' ', description_en)
+                        # print(f"suj_real_code: {suj_real_code} | description_en: '{description_en}'")
+
+                prereq_codes = None
+                
+                if last_table:
+                    content = last_table.get_text(separator='\n', strip=True)
+                    lines = content.split('\n')
+                    codes = []
+                    for line in lines:
+                        codes.extend(re.findall(r'\d{7}', line))
+                    prereq_codes = ','.join(sorted(set(codes)))
+                
+                return {
+                    'description': {
+                        'th': description_th,
+                        'en': description_en
+                    },
+                    'prereq_codes': prereq_codes
+                }
+            except Exception as e:
+                attempts = old_attempts + 0
+                cooldown_times = [2, 2, 2, 10, 20]
+                if attempts >= len(cooldown_times):
+                    attempts = len(cooldown_times) - 1
+
+                if(attempts >= 3):
+                    print(f"\nError: {e}")
+                cooldown = cooldown_times[attempts]
+                for remaining in range(cooldown, 0, -1):
+                    print(f"\rRestart in {remaining} seconds...", end="", flush=True)
+                    time.sleep(1)
+                print("\rRetrying...                            ", end="", flush=True)
+                return run(lang, suj_real_code, attempts+1)
+        
+        def get_subjects_to_update():
+            with psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host) as conn:
+                with conn.cursor() as cur:
+                    query = """
+                    SELECT DISTINCT suj_real_id 
+                    FROM courseset_subject 
+                    WHERE suj_pre_req_updated is not TRUE 
+                    AND suj_real_id is not null
+                    """
+                    cur.execute(query)
+                    subjects = cur.fetchall()
+            return [subject[0] for subject in subjects]
+
+        subjects_to_update = get_subjects_to_update()
+        
+        if subjects_to_update:
+            total_subjects = len(subjects_to_update)
+            print(f"Found {total_subjects} subjects to update.")
+            user_input = input("Press 'y' to continue the process: ")
+            if user_input.lower() != 'y':
+                print("Process aborted by user.")
+                return
+
+            update_data = []
+            try:
+                for index, subject_code in enumerate(subjects_to_update, 1):
+                    overall_progress = (index / total_subjects) * 100
+                    batch_progress = ((index - 1) % 500 + 1) / 500 * 100
+                    
+                    progress_message = f"\rUpdating subject: {subject_code} | Overall Progress: {overall_progress:.2f}% ({index}/{total_subjects}) [{batch_progress:.2f}%]"
+                    print(f"{progress_message:<100}", end="", flush=True)
+                    
+                    req_data = run('th', subject_code)
+                    description = req_data['description']
+                    prereq_codes = req_data['prereq_codes']
+                    update_data.append((prereq_codes, True, subject_code, description['th'], description['en']))
+
+                    if index % 50 == 0 or index == total_subjects:
+                        with psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host) as conn:
+                            with conn.cursor() as cur:
+                                update_query = """
+                                UPDATE courseset_subject
+                                SET suj_pre_req = data.prereq_codes,
+                                    suj_pre_req_updated = data.updated,
+                                    suj_desc_th = data.description_th,
+                                    suj_desc_en = data.description_en
+                                FROM (VALUES %s) AS data(prereq_codes, updated, suj_real_id, description_th, description_en)
+                                WHERE courseset_subject.suj_real_id = data.suj_real_id
+                                """
+                                execute_values(cur, update_query, update_data)
+                                conn.commit()
+                        update_data = []  # Clear the update_data list after bulk update
+
+                    if index % 500 == 0:
+                        print("\nReached 500 items. Starting 5-minute cooldown.")
+                        cooldown_end = datetime.now() + timedelta(minutes=5)
+                        while datetime.now() < cooldown_end:
+                            remaining = cooldown_end - datetime.now()
+                            cooldown_message = f"\rCooldown: {remaining.seconds // 60:02d}:{remaining.seconds % 60:02d} remaining"
+                            print(f"{cooldown_message:<100}", end="", flush=True)
+                            time.sleep(1)
+                        print("\nCooldown finished. Resuming updates.")
+
+                print("\nAll subjects updated successfully.")
+            except KeyboardInterrupt:
+                print("\nProcess interrupted by user. Performing final update...")
+                if update_data:
+                    with psycopg2.connect(dbname=dbname, user=sqluser, password=sqlpass, host=host) as conn:
+                        with conn.cursor() as cur:
+                            update_query = """
+                            UPDATE courseset_subject
+                            SET suj_pre_req = data.prereq_codes,
+                                suj_pre_req_updated = data.updated,
+                                suj_desc_th = data.description_th,
+                                suj_desc_en = data.description_en
+                            FROM (VALUES %s) AS data(prereq_codes, updated, suj_real_id, description_th, description_en)
+                            WHERE courseset_subject.suj_real_id = data.suj_real_id
+                            """
+                            execute_values(cur, update_query, update_data)
+                            conn.commit()
+                print(f"Process stopped. {index} out of {total_subjects} subjects were updated.")
+        else:
+            print("No subjects found to update.")
+            return
+        # run('en')
+
     # scrap_courses_data
     # ดึงข้อมูลของรายวิชาที่ต้องการค้นหาในแต่ละเทอมปีการศึกษามาเก็บไว้
     # ประกอบด้วย : เก็บใน course_detail
