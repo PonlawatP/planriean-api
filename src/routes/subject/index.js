@@ -355,6 +355,14 @@ const validateReviewInput = (body) => {
         };
     }
 
+    // Validate content length (must not exceed 1000 characters)
+    if (content.length > 1000) {
+        return {
+            valid: false,
+            message: "เนื้อหารีวิวต้องไม่เกิน 1000 ตัวอักษร"
+        };
+    }
+
     // Validate rate (must be 1-5)
     if (!Number.isInteger(rate) || rate < 0 || rate > 5) {
         return {
