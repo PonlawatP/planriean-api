@@ -31,7 +31,7 @@ async function getListPlanUser(req, res) {
 
     const uid = user.uid;
 
-    result = await db.query("SELECT * FROM plan_detail WHERE user_uid = $1", [
+    const result = await db.query("SELECT * FROM plan_detail WHERE user_uid = $1", [
       uid,
     ]);
 
