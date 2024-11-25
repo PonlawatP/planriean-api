@@ -103,6 +103,7 @@ const {
 } = require("./routes/users");
 const { getPlanRestricted, updatePlanRestricted, getPlanSubjectsRestricted, updatePlanSubjectsRestricted } = require("./routes/plan-restrict");
 const { Pool } = require('pg');
+const { getSubjectDetail, a_addSubjectReview, a_deleteSubjectReview, a_editSubjectReview } = require("./routes/subject");
 
 // Enable CORS for all routes with wildcard origin
 const corsOptions = {
@@ -155,7 +156,10 @@ app.get("/university/:uni_id/course/:year/:semester/lecturer", getLectureGroups)
 app.get("/university/:uni_id/course-set/:cr_id", getCoursesetDetail);
 app.get("/university/:uni_id/course-set/:cr_id/map", getCoursesetMapping);
 
-
+app.get("/university/:uni_id/subject/:suj_id", getSubjectDetail);
+app.post("/university/:uni_id/subject/:suj_id/review", a_addSubjectReview);
+app.delete("/university/:uni_id/subject/:suj_id/review", a_deleteSubjectReview);
+app.put("/university/:uni_id/subject/:suj_id/review", a_editSubjectReview);
 app.get("/university/", getUniversityList);
 app.get("/university/:uni_id", getUniversityDetail);
 app.get("/university/:uni_id/season", getUniversitySeasons);

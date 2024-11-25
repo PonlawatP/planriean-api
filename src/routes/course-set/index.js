@@ -1,7 +1,9 @@
 const db = require("../../db");
+const redis = require("../../redis");
 const { templateGE } = require("../../utils/customs/msu");
 const { getUserFromToken, getUserFromUID } = require("../../utils/userutil");
 const { getSubjectDataFromPlanRestrictSubject } = require("../plan-restrict");
+const CACHE_DURATION = 60 * 60; // 1 hour in seconds
 
 async function getCoursesetDetail(req, res) {
   try {
@@ -298,10 +300,28 @@ async function getCoursesetSubjectRestricted(req) {
 async function getSubjectGroups(req, res) {
   try {
     const { uni_id = 1, year, semester } = req.params;
-    const { type = "normal", no_subjects } = req.query;
-    // console.log(year, semester);
-    // return;
-    // if (user != null) {
+    const { type = "normal", no_subjects = false } = req.query;
+
+    const result_updated = await db.query(
+      `SELECT LOWER(uni_key) as uni_key, to_char(
+          refresh_updated_at + interval '543 years',
+          'DD/MM/YY HH24:MI:SS'
+      ) AS formatted_date FROM university_detail WHERE uni_id = $1`,
+      [uni_id]
+    );
+
+    const uni_key = result_updated.rows[0].uni_key;
+
+    // Create cache key
+    const cacheKey = `planriean-${uni_key}:subjectgroups:${year}-${semester}:${type}-${no_subjects ? "no_subjects" : "with_subjects"}`;
+
+    // Check if cache is valid
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      return res.json({ cached: true, data: JSON.parse(cachedData) });
+    }
+
+    // If no cache or expired, get fresh data
     let crs = await db.query(
       "SELECT fac_id, fac_key, fac_name_en, fac_name_th FROM university_faculty WHERE uni_id = $1 AND enabled = TRUE ORDER BY fac_id;",
       [uni_id]
@@ -318,7 +338,7 @@ async function getSubjectGroups(req, res) {
                 LIMIT 1
             ) as name_th
             ,CAST(COUNT(sec) AS INTEGER) as total_sec
-            ${type == "review" ? ",CAST((SELECT COUNT(*) FROM review_entries WHERE suj_real_code = course_detail.suj_real_code) AS INTEGER) as total_review, course_detail.suj_real_code" : ""}
+            ${type == "review" ? ",CAST((SELECT COUNT(*) FROM subject_review WHERE suj_real_code = course_detail.suj_real_code) AS INTEGER) as total_review, course_detail.suj_real_code" : ""}
         FROM 
             course_detail 
         WHERE 
@@ -334,8 +354,6 @@ async function getSubjectGroups(req, res) {
       `,
       [year, semester, uni_id]
     );
-    // console.log(crs.rows);
-    // console.log(crs_sujs.rows);
 
     crs = crs.rows.map((m) => {
       return {
@@ -363,47 +381,25 @@ async function getSubjectGroups(req, res) {
                     s.code.startsWith(String(m.fac_id).padStart(2, "0"))
                   ),
               },
-              // {
-              //   header: "หมวดหมู่ที่ 1",
-              //   desc: "ทักษะการเรียนรู้ตลอดชีวิต",
-              //   global: false,
-              //   subjects: crs_sujs.rows.filter((s) =>
-              //     s.code.startsWith(String(m.fac_id).padStart(2, "0"))
-              //   ),
-              // },
             ],
       };
     });
-    // console.log(crs);
-    // if (crs.rows.length > 0) {
-    //   const crsr = crs.rows[0];
-    //   const unv = await db.query(
-    //     "SELECT * FROM university_detail WHERE uni_id = $1;",
-    //     [crsr.uni_id]
-    //   );
-    //   const fac = await db.query(
-    //     "SELECT * FROM university_faculty WHERE uni_id = $1 AND fac_id = $2;",
-    //     [crsr.uni_id, crsr.fac_id]
-    //   );
-    //   const major = await db.query(
-    //     "SELECT * FROM university_major WHERE uni_id = $1 AND fac_id = $2 AND major_id = $3;",
-    //     [crsr.uni_id, crsr.fac_id, crsr.major_key_ref]
-    //   );
-    //   const courseset_group = await db.query(
-    //     "SELECT name_en, name_th FROM courseset_group WHERE uni_id = $1 AND cr_group_id = $2;",
-    //     [crsr.uni_id, crsr.cr_group_id]
-    //   );
 
     const result = {
+      cached: false,
       data: crs,
     };
-    res.json(result);
-    // } else {
-    //   throw new Error("error!");
-    // }
-    // } else {
-    //   throw new Error("error!");
-    // }
+
+    // Store in Redis cache
+    try {
+      const pipeline = redis.pipeline();
+      pipeline.set(cacheKey, JSON.stringify(crs), 'EX', CACHE_DURATION); // Cache for 30 seconds
+      await pipeline.exec();
+    } catch (redisError) {
+      console.error('Redis pipeline failed:', redisError);
+    }
+
+    res.json({ cached: false, data: crs });
   } catch (err) {
     console.error(err);
     res.status(404).send("Courseset Not Found");
