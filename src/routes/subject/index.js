@@ -10,8 +10,11 @@ const getSubjectReviewByRealId = async (req, res) => {
 
     const user = await getUserFromToken(req);
 
-    const pre_review_owned = user == undefined ? null : review.rows.find(review => review.uid == user.uid);
-    const review_owned = pre_review_owned == null ? null : {
+    const sum_term = await db.query("SELECT code, year, semester, sec, lecturer FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2", [uni_id, suj_id]);
+
+    const own_review = user == undefined ? undefined : review.rows.find(review => review.uid == user.uid);
+    const pre_review_owned = user == undefined ? null : { ...own_review, sec_detail: own_review == undefined ? undefined : sum_term.rows.find(term => term.semester == own_review.std_semester && term.year == own_review.std_year && term.sec == own_review.sec) };
+    const review_owned = pre_review_owned == null || pre_review_owned.sec_detail == undefined ? null : {
         ...pre_review_owned,
         uid: undefined,
         image: undefined,
@@ -31,6 +34,7 @@ const getSubjectReviewByRealId = async (req, res) => {
             ...row,
             uid: undefined,
             image: undefined,
+            sec_detail: sum_term.rows.find(term => term.semester == row.std_semester && term.year == row.std_year && term.sec == row.sec),
             user: {
                 anonymous: row.anonymous,
                 uid: row.anonymous == true ? null : row.uid,

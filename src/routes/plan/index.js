@@ -29,7 +29,7 @@ async function getListPlanUser(req, res) {
       return;
     }
 
-    const uid = user.uid;
+    const { uid } = user;
 
     const result = await db.query("SELECT * FROM plan_detail WHERE user_uid = $1", [
       uid,
@@ -274,6 +274,17 @@ async function updatePlanName(req, res) {
       .status(400)
       .json({ success: false, error: error.code, msg: error.detail });
   }
+}
+
+// function to duplicate whole plan_subject and plan_detail by plan_id (and edit name using plan_name)
+async function duplicatePlan(req, res) {
+  const { plan_id } = req.params;
+  const { plan_name } = req.body;
+  const result = await db.query(
+    `INSERT INTO "plan_detail" ("plan_name", "user_uid", "cr_year", "cr_seamseter", "cr_id", "std_year", "uni_id", "fac_id", "major_id", "plan_color", "plan_img", "plan_dark", "is_folder", "ref_folder-plan_id", "create_at", "status") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *;`,
+    [plan_name, user.uid, cr_year, cr_seamseter, cr_id, std_year, uni_id, fac_id, major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, date, "personal"]
+  );
+  res.json({ success: true, result: result.rows[0] });
 }
 
 async function getPlanSubjectsUser(req, res) {
