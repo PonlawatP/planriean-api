@@ -14,7 +14,7 @@ const getSubjectReviewByRealId = async (req, res) => {
 
     const own_review = user == undefined ? undefined : review.rows.find(review => review.uid == user.uid);
     const pre_review_owned = user == undefined ? null : { ...own_review, sec_detail: own_review == undefined ? undefined : sum_term.rows.find(term => term.semester == own_review.std_semester && term.year == own_review.std_year && term.sec == own_review.sec) };
-    const review_owned = pre_review_owned == null || pre_review_owned.sec_detail == undefined ? null : {
+    const review_owned = own_review == null ? null : {
         ...pre_review_owned,
         uid: undefined,
         image: undefined,
@@ -25,13 +25,15 @@ const getSubjectReviewByRealId = async (req, res) => {
             name: pre_review_owned.std_name,
             image: pre_review_owned.image
         }
-
     };
+    console.log(own_review);
 
     const data = {
         review_owned,
         data: review.rows.map(row => ({
             ...row,
+            username: undefined,
+            std_name: undefined,
             uid: undefined,
             image: undefined,
             sec_detail: sum_term.rows.find(term => term.semester == row.std_semester && term.year == row.std_year && term.sec == row.sec),
@@ -186,7 +188,7 @@ const getSubjectDetail = async (req, res) => {
 async function a_addSubjectReview(req, res) {
     const { uni_id, suj_id } = req.params;
     const user = await getUserFromToken(req);
-    const { content, images = [], rate, term, sec } = req.body;
+    const { content, images = [], rate, term, sec, anonymous } = req.body;
 
     const validate = validateReviewInput(req.body);
     if (!validate.valid) {
@@ -197,7 +199,7 @@ async function a_addSubjectReview(req, res) {
     }
 
     // Parse term into semester and year
-    const [semester, year] = term.split('/');
+    const [semester, year] = term != null ? term.split('/') : [null, null];
 
     // await new Promise(resolve => setTimeout(resolve, 2000));
     // res.status(201).json({
@@ -213,11 +215,11 @@ async function a_addSubjectReview(req, res) {
             `INSERT INTO subject_review (
                 uid, uni_id, suj_real_code, content, images, 
                 std_semester, std_year, created_at, updated_at, 
-                flag, badge, rate, sec
+                flag, badge, rate, sec, anonymous
             ) VALUES (
                 $1, $2, $3, $4, $5, 
                 $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
-                '{}', '{}', $8, $9
+                '{}', '{}', $8, $9, $10
             ) RETURNING review_id`,
             [
                 user.uid,
@@ -228,7 +230,8 @@ async function a_addSubjectReview(req, res) {
                 semester,
                 year,
                 rate,
-                sec
+                sec,
+                anonymous
             ]
         );
 
@@ -256,7 +259,7 @@ async function a_addSubjectReview(req, res) {
 async function a_editSubjectReview(req, res) {
     const { uni_id, suj_id } = req.params;
     const user = await getUserFromToken(req);
-    const { content, images = [], rate, term, sec } = req.body;
+    const { content, images = [], rate, term, sec, anonymous } = req.body;
 
     const validate = validateReviewInput(req.body);
     if (!validate.valid) {
@@ -278,10 +281,11 @@ async function a_editSubjectReview(req, res) {
                  std_year = $4,
                  updated_at = CURRENT_TIMESTAMP,
                  rate = $5,
-                 sec = $6
-             WHERE uid = $7 
-             AND uni_id = $8 
-             AND suj_real_code = $9
+                 sec = $6,
+                 anonymous = $7
+             WHERE uid = $8 
+             AND uni_id = $9 
+             AND suj_real_code = $10
              RETURNING review_id`,
             [
                 content,
@@ -290,6 +294,7 @@ async function a_editSubjectReview(req, res) {
                 year,
                 rate,
                 sec,
+                anonymous,
                 user.uid,
                 uni_id,
                 suj_id

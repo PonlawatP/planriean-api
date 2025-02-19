@@ -46,8 +46,8 @@ async function getUserFromToken(req, show_passwd = false) {
       );
     } else {
       result = await db.query(
-        `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : 'email'} = ${jwt_dc.uid != null ? '$1' : 'LOWER($1)'}`,
-        [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.email]
+        `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : jwt_dc.sub != null ? 'username' : 'email'} = ${jwt_dc.uid != null ? '$1' : jwt_dc.sub != null ? '$1' : 'LOWER($1)'}`,
+        [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.sub != null ? jwt_dc.sub : jwt_dc.email]
       );
     }
 
