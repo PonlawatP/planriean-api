@@ -156,7 +156,6 @@ async function elysiaGetCoursesSpecific(context) {
           uni_id,
           year,
           semester,
-          (major_groups == "" ? "" : major_groups + "|") +
           (searchData.code.length > 0
             ? searchData.code.join("|")
             : searchData.type.join("|").replaceAll("*", "%")),
