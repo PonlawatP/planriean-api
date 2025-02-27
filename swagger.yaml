@@ -1,0 +1,772 @@
+openapi: 3.0.0
+info:
+  title: Planriean Subjects Service API
+  version: '2.0.1'
+  description: API for managing university course planning and registration
+
+servers:
+  - url: http://localhost:3030
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+        error:
+          type: integer
+        message:
+          type: string
+
+    HomeResponse:
+      type: object
+      properties:
+        service:
+          type: string
+        version:
+          type: string
+        status:
+          type: string
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+
+    UserProfile:
+      type: object
+      properties:
+        uid:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        roles:
+          type: array
+          items:
+            type: object
+        plan_created:
+          type: integer
+
+    Plan:
+      type: object
+      properties:
+        plan_id:
+          type: string
+        plan_name:
+          type: string
+        user_uid:
+          type: string
+        cr_year:
+          type: string
+        cr_seamseter:
+          type: string
+        status:
+          type: string
+        subjects:
+          type: array
+          items:
+            type: object
+
+    RegisterYearRequest:
+      type: object
+      properties:
+        year:
+          type: string
+          example: "2024"
+      required:
+        - year
+
+    RegisterSemesterRequest:
+      type: object
+      properties:
+        semester:
+          type: string
+          example: "1"
+      required:
+        - semester
+
+    RegisterTimelineRequest:
+      type: object
+      properties:
+        ss_round:
+          type: string
+          example: "1"
+      required:
+        - ss_round
+
+    RegisterSubTimelineRequest:
+      type: object
+      properties:
+        ss_round:
+          type: string
+          example: "1"
+        std_year:
+          type: string
+          example: "1"
+        ss_start:
+          type: string
+          format: date-time
+          example: "2024-06-01T00:00:00Z"
+        ss_end:
+          type: string
+          format: date-time
+          example: "2024-10-01T00:00:00Z"
+      required:
+        - ss_round
+        - std_year
+        - ss_start
+        - ss_end
+
+    UniversityCreateRequest:
+      type: object
+      properties:
+        uni_key:
+          type: string
+          example: "KMITL"
+        uni_name_th:
+          type: string
+          example: "สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง"
+        uni_name_en:
+          type: string
+          example: "King Mongkut's Institute of Technology Ladkrabang"
+        uni_logo:
+          type: string
+          example: "https://example.com/logo.png"
+      required:
+        - uni_key
+        - uni_name_th
+        - uni_name_en
+
+paths:
+  /:
+    get:
+      summary: Get API Status
+      responses:
+        '200':
+          description: Service status information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+
+  /auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid credentials
+
+  /auth/token:
+    post:
+      summary: Verify and refresh token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '403':
+          description: Invalid token
+
+  /user:
+    get:
+      summary: Get user profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '403':
+          description: Unauthorized
+
+  /plan:
+    get:
+      summary: Get user's plans
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of user's plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plan'
+
+  /plan/create:
+    post:
+      summary: Create new plan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan_name:
+                  type: string
+                university:
+                  type: string
+                cr_year:
+                  type: string
+                cr_seamseter:
+                  type: string
+      responses:
+        '200':
+          description: Plan created successfully
+        '400':
+          description: Invalid request
+
+  /university/{uni_id}/course/{year}/{semester}:
+    post:
+      summary: Get specific courses
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: semester
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course list retrieved successfully
+        '400':
+          description: Invalid request
+
+  # Authentication Routes
+  /auth/register:
+    post:
+      summary: Register new user
+      tags: [Auth]
+      responses:
+        '200':
+          description: Registration successful
+
+  /auth/register/email:
+    post:
+      summary: Check email availability
+      tags: [Auth]
+      responses:
+        '200':
+          description: Email availability status
+
+  /auth/register/username:
+    post:
+      summary: Check username availability
+      tags: [Auth]
+      responses:
+        '200':
+          description: Username availability status
+
+  /auth/forget-password:
+    post:
+      summary: Request password reset
+      tags: [Auth]
+      responses:
+        '200':
+          description: Password reset initiated
+
+  /auth/verify-otp:
+    post:
+      summary: Verify OTP code
+      tags: [Auth]
+      responses:
+        '200':
+          description: OTP verification successful
+
+  /auth/change-password:
+    post:
+      summary: Change user password
+      tags: [Auth]
+      responses:
+        '200':
+          description: Password changed successfully
+
+  # User Routes
+  /user/history:
+    get:
+      summary: Get user subject history
+      security:
+        - bearerAuth: []
+      tags: [User]
+      responses:
+        '200':
+          description: User subject history retrieved
+    put:
+      summary: Update user subject history
+      security:
+        - bearerAuth: []
+      tags: [User]
+      responses:
+        '200':
+          description: History updated successfully
+
+  /user/update/fs:
+    put:
+      summary: Update user file system
+      tags: [User]
+      responses:
+        '200':
+          description: File system updated
+
+  # Plan Routes
+  /plan/view/{plan_id}/name:
+    put:
+      summary: Update plan name
+      security:
+        - bearerAuth: []
+      tags: [Plan]
+      parameters:
+        - name: plan_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan name updated
+
+  # University Routes
+  /university/{uni_id}/season:
+    get:
+      summary: Get university seasons
+      tags: [University]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: University seasons retrieved
+
+  # Course Set Routes
+  /university/{uni_id}/course-set-group:
+    post:
+      summary: Add course set group
+      security:
+        - bearerAuth: []
+      tags: [Course Set Group]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Course set group created
+
+  /university/{uni_id}/course-set-group/{cr_group_id}:
+    put:
+      summary: Update course set group
+      security:
+        - bearerAuth: []
+      tags: [Course Set Group]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cr_group_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course set group updated
+    delete:
+      summary: Delete course set group
+      security:
+        - bearerAuth: []
+      tags: [Course Set Group]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cr_group_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course set group deleted
+
+  # Restricted Group Routes
+  /university/{uni_id}/restrict:
+    get:
+      summary: Get course restrict groups
+      tags: [Restricted Group]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course restrict groups retrieved
+    post:
+      summary: Add course restrict group
+      tags: [Restricted Group]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Course restrict group created
+
+  /university/{uni_id}/restrict/{cr_restgrp_id}:
+    get:
+      summary: Get course restrict group data
+      tags: [Restricted Group]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cr_restgrp_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Course restrict group data retrieved
+
+  # Plan Restricted Routes
+  /plan-restrict/view/{restgrp_id}:
+    get:
+      summary: Get restricted plan
+      security:
+        - bearerAuth: []
+      tags: [Plan Restricted]
+      parameters:
+        - name: restgrp_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Restricted plan retrieved
+    put:
+      summary: Update restricted plan
+      security:
+        - bearerAuth: []
+      tags: [Plan Restricted]
+      parameters:
+        - name: restgrp_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Restricted plan updated
+
+  /plan-restrict/view/{restgrp_id}/subject:
+    get:
+      summary: Get restricted plan subjects
+      security:
+        - bearerAuth: []
+      tags: [Plan Restricted]
+      parameters:
+        - name: restgrp_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Restricted plan subjects retrieved
+    put:
+      summary: Update restricted plan subjects
+      security:
+        - bearerAuth: []
+      tags: [Plan Restricted]
+      parameters:
+        - name: restgrp_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Restricted plan subjects updated
+
+  # Register Routes
+  /university/{uni_id}/register:
+    get:
+      summary: Get register intervals
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Register intervals retrieved
+
+  /university/{uni_id}/register/year:
+    post:
+      summary: Add register year
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterYearRequest'
+      responses:
+        '201':
+          description: Year added successfully
+          content:
+            application/json:
+              example:
+                success: true
+                message: "Year added successfully."
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              example:
+                success: false
+                message: "Year already exists for this university."
+
+  /university/{uni_id}/register/year/{oldYear}:
+    put:
+      summary: Update register year
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: oldYear
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Register year updated
+    delete:
+      summary: Delete register year
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: oldYear
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Register year deleted
+
+  /university/{uni_id}/register/year/{year}/semester:
+    post:
+      summary: Add register semester
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterSemesterRequest'
+      responses:
+        '201':
+          description: Semester added successfully
+          content:
+            application/json:
+              example:
+                success: true
+                message: "Semester added successfully."
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              example:
+                success: false
+                message: "Semester in this year has already exists for this university."
+
+  /university/{uni_id}/register/year/{year}/semester/{semester}/timeline:
+    post:
+      summary: Add register timeline
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: semester
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Register timeline added
+
+  /university/{uni_id}/register/year/{year}/semester/{semester}/timeline/{timeline}/sub:
+    post:
+      summary: Add register sub-timeline
+      tags: [Register]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: semester
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: timeline
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Register sub-timeline added
+
+  /university:
+    post:
+      summary: Add university
+      tags: [University]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UniversityCreateRequest'
+      responses:
+        '201':
+          description: University created successfully
+          content:
+            application/json:
+              example:
+                success: true
+                message: "University added successfully"
+                data:
+                  uni_id: "1"
+                  uni_key: "KMITL"
+                  uni_name_th: "สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง"
+                  uni_name_en: "King Mongkut's Institute of Technology Ladkrabang"
+                  uni_logo: "https://example.com/logo.png"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              example:
+                success: false
+                message: "University with this key already exists"
+
+security:
+  - bearerAuth: []

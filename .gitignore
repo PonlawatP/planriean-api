@@ -26,3 +26,8 @@ node_modules*
 *package-lock*
 .env*
 .env
+/node_modules
+/services/build
+/services/dist
+/services/university/__pycache__
+/dist
