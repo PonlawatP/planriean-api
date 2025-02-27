@@ -6,7 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile.express
     # ports:
-    #   - "3030:3030"
+    #   - "3030:3030"deploy:
+    deploy:
+      replicas: 2
     environment:
       - PORT=3030
       - DB_HOST=${DB_HOST}
@@ -18,8 +20,13 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASS=${REDIS_PASS}
     restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    extra_hosts:
+      - "planriean-db:172.18.0.1"
+      - "planriean-redis:172.18.0.1"
     networks:
-      - app-network
+      - nginx_planriean
 
   elysia:
     build:
@@ -27,6 +34,8 @@ services:
       dockerfile: Dockerfile.elysia
     # ports:
     #   - "3031:3031"
+    deploy:
+      replicas: 2
     environment:
       - ELYSIA_PORT=3031
       - DB_HOST=${DB_HOST}
@@ -38,8 +47,13 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASS=${REDIS_PASS}
     restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    extra_hosts:
+      - "planriean-db:172.18.0.1"
+      - "planriean-redis:172.18.0.1"
     networks:
-      - app-network
+      - nginx_planriean
 
   nginx:
     image: nginx:alpine
@@ -47,13 +61,17 @@ services:
       - "3030:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/localtime:/etc/localtime:ro
     depends_on:
       - express
       - elysia
     restart: unless-stopped
+    extra_hosts:
+      - "planriean-db:172.18.0.1"
+      - "planriean-redis:172.18.0.1"
     networks:
-      - app-network
+      - nginx_planriean
 
 networks:
-  app-network:
-    driver: bridge
+  nginx_planriean:
+    external: true
