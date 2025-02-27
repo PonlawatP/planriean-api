@@ -17,10 +17,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@elysiajs/cors": "^1.2.0",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
+    "bun": "^1.0.25",
     "cors": "^2.8.5",
     "dotenv": "^16.4.4",
+    "elysia": "^0.8.17",
     "express": "^4.18.2",
     "googleapis": "^144.0.0",
     "ioredis": "^5.4.1",
@@ -32,8 +35,6 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.11.3",
-    "redis": "^4.7.0",
-    "elysia": "^0.8.17",
-    "bun": "^1.0.25"
+    "redis": "^4.7.0"
   }
 }
