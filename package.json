@@ -8,7 +8,10 @@
     "build": "bun build ./src/index.js --outdir ./dist --target bun",
     "start": "bun dist/index.js",
     "start-prod": "bun ./out/dist/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start-elysia": "bun run src/elysia-server.js",
+    "start-hybrid": "bash ./start-hybrid.sh",
+    "load-test": "bun run load-test.js"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +32,8 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.11.3",
-    "redis": "^4.7.0"
+    "redis": "^4.7.0",
+    "elysia": "^0.8.17",
+    "bun": "^1.0.25"
   }
 }

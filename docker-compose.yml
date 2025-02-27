@@ -1,14 +1,59 @@
+version: '3.8'
+
 services:
-  planriean-api-fnlp:
-    image: ponlawatp/planriean-api-fnlp:latest
+  express:
+    build:
+      context: .
+      dockerfile: Dockerfile.express
+    # ports:
+    #   - "3030:3030"
+    environment:
+      - PORT=3030
+      - DB_HOST=${DB_HOST}
+      - DB_SQL_USER=${DB_SQL_USER}
+      - DB_SQL_PASS=${DB_SQL_PASS}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASS=${REDIS_PASS}
     restart: unless-stopped
-    deploy:
-      replicas: 5
-    extra_hosts:
-      - "planriean-db:100.111.100.50"
     networks:
-      - nginx_planriean
+      - app-network
+
+  elysia:
+    build:
+      context: .
+      dockerfile: Dockerfile.elysia
+    # ports:
+    #   - "3031:3031"
+    environment:
+      - ELYSIA_PORT=3031
+      - DB_HOST=${DB_HOST}
+      - DB_SQL_USER=${DB_SQL_USER}
+      - DB_SQL_PASS=${DB_SQL_PASS}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=${DB_PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASS=${REDIS_PASS}
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "3030:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - express
+      - elysia
+    restart: unless-stopped
+    networks:
+      - app-network
 
 networks:
-  nginx_planriean:
-    external: true
+  app-network:
+    driver: bridge
