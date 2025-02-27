@@ -83,38 +83,61 @@ const ELYSIA_PORT = process.env.ELYSIA_PORT || 3031;
 // Create a specialized version of getCoursesSpecific for Elysia
 async function elysiaGetCoursesSpecific(context) {
   try {
-    const { uni_id, year, semester } = context.params;
+    // Add response compression
+    // context.set.headers['Content-Encoding'] = 'gzip';
+    
+    const { year, semester } = context.params;
+    const uni_id = context.params.uni_id || 1; // Get uni_id from params
     let searchData = context.body;
 
     if (searchData.type.length == 0) {
       searchData.type = ["004*"];
     }
 
-    let major_groups = "";
-    let include_groups = [];
-
-    const result_updated = await db.query(
-      `SELECT LOWER(uni_key) as uni_key, to_char(
-          refresh_updated_at + interval '543 years',
-          'DD/MM/YY HH24:MI:SS'
-      ) AS formatted_date FROM university_detail WHERE uni_id = $1`,
-      [uni_id]
-    );
-
-    const data_updated = result_updated.rows[0].formatted_date;
-    const uni_key = result_updated.rows[0].uni_key;
-
+    // Create cache key early to check cache first (fastest path)
+    const uni_key = await getUniKey(uni_id);
     const searchData_ = `planriean-${uni_key}:subjs:${year}-${semester}:${searchData.type.join(",")}-${searchData.code.join(",")}-${searchData.date.join(",")}-${searchData.master.join(",")}-${searchData.time}`;
     const lastDataUpdatedKey = `planriean-${uni_key}:subjs:dataUpdated`;
-    const lastDataUpdatedCacheTime = await redis.get(lastDataUpdatedKey);
-
-    if (lastDataUpdatedCacheTime == data_updated) {
-      const cachedData = await redis.get(searchData_);
-      if (cachedData) {
+    
+    // Check cache first (fastest path)
+    const [lastDataUpdatedCacheTime, cachedData] = await Promise.all([
+      redis.get(lastDataUpdatedKey),
+      redis.get(searchData_)
+    ]);
+    
+    // Get data_updated only if needed
+    let data_updated;
+    if (!cachedData || !lastDataUpdatedCacheTime) {
+      const result_updated = await db.query(
+        `SELECT LOWER(uni_key) as uni_key, to_char(
+            refresh_updated_at + interval '543 years',
+            'DD/MM/YY HH24:MI:SS'
+        ) AS formatted_date FROM university_detail WHERE uni_id = $1`,
+        [uni_id]
+      );
+      data_updated = result_updated.rows[0].formatted_date;
+      
+      // If we already have cached data and it's still valid, return it
+      if (cachedData && lastDataUpdatedCacheTime == data_updated) {
+        return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
+      }
+    } else if (cachedData && lastDataUpdatedCacheTime) {
+      // We have both cache values, check if valid
+      const result_updated = await db.query(
+        `SELECT to_char(
+            refresh_updated_at + interval '543 years',
+            'DD/MM/YY HH24:MI:SS'
+        ) AS formatted_date FROM university_detail WHERE uni_id = $1`,
+        [uni_id]
+      );
+      data_updated = result_updated.rows[0].formatted_date;
+      
+      if (lastDataUpdatedCacheTime == data_updated) {
         return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
       }
     }
 
+    // If we get here, we need to generate fresh data
     // Run these queries in parallel for better performance
     const [coursesData, result, subjects] = await Promise.all([
       getCoursesData([uni_id, year, semester]),
@@ -144,69 +167,91 @@ async function elysiaGetCoursesSpecific(context) {
 
     const courses = result.rows;
 
-    // Create hash maps for faster lookups
-    const subjectsMap = subjects.reduce((acc, sub) => {
-      acc[sub.suj_real_id] = sub.suj_name_th;
-      return acc;
-    }, {});
+    // Use Map objects instead of reduce for better performance
+    const subjectsMap = new Map();
+    for (const sub of subjects) {
+      subjectsMap.set(sub.suj_real_id, sub.suj_name_th);
+    }
 
-    const coursesMap = courses.reduce((acc, course) => {
+    const coursesMap = new Map();
+    for (const course of courses) {
       const key = `${course.suj_real_code}_${course.sec}`;
-      acc[key] = course;
-      return acc;
-    }, {});
+      coursesMap.set(key, course);
+    }
 
-    // Use hash maps for O(1) lookups instead of find()
-    const enhancedResults = coursesData.map(row => {
+    // Pre-allocate array size if possible
+    const enhancedResults = [];
+    for (const row of coursesData) {
       const courseKey = `${row.suj_real_code}_${row.sec}`;
-      const matchingCourse = coursesMap[courseKey];
+      const matchingCourse = coursesMap.get(courseKey);
 
-      return matchingCourse ? {
-        ...row,
-        name_th: subjectsMap[row.suj_real_code] || null,
-        ...matchingCourse
-      } : null;
-    }).filter(r => r != null);
+      if (matchingCourse) {
+        // Use Object.assign for faster object merging
+        enhancedResults.push(Object.assign({}, row, {
+          name_th: subjectsMap.get(row.suj_real_code) || null
+        }, matchingCourse));
+      }
+    }
 
-    // Filter results based on search criteria
-    const searchResults = enhancedResults
-      .filter((item) => {
-        return (
-          (searchData.date.includes(item.time.substring(0, 2)) ||
-            searchData.date.length == 0) &&
-          (searchData.master.length == 0 ||
-            searchData.master.filter((m) => item.lecturer.includes(m)).length >
-            0) &&
-          (item.time.split(";").filter((fitem) => {
-            if (searchData.time.includes("-")) {
-              if (fitem.trim() == "") {
-                return false;
-              }
-              const fts = fitem.split("-");
-              const ss = searchData.time.split("-");
-              const sj_start_time = Number(fts[0].substring(2, 4));
-              const sj_end_time = Number(fts[1].substring(0, 2));
-              const ss_start_time = Number(ss[0]);
-              const ss_end_time = Number(ss[1]);
-              return (
-                sj_start_time >= ss_start_time && sj_end_time <= ss_end_time
-              );
-            } else {
-              return Number(fitem.substring(2, 4)) >= Number(searchData.time);
+    // Use a more efficient filtering approach
+    const searchResults = [];
+    for (const item of enhancedResults) {
+      // Skip early if possible
+      if (searchData.date.length > 0 && !searchData.date.includes(item.time.substring(0, 2))) {
+        continue;
+      }
+      
+      if (searchData.master.length > 0) {
+        let found = false;
+        for (const m of searchData.master) {
+          if (item.lecturer.includes(m)) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) continue;
+      }
+      
+      // Time filtering
+      if (searchData.time !== "total") {
+        const timeParts = item.time.split(";");
+        let timeMatch = false;
+        
+        for (const fitem of timeParts) {
+          if (fitem.trim() === "") continue;
+          
+          if (searchData.time.includes("-")) {
+            const fts = fitem.split("-");
+            const ss = searchData.time.split("-");
+            const sj_start_time = Number(fts[0].substring(2, 4));
+            const sj_end_time = Number(fts[1].substring(0, 2));
+            const ss_start_time = Number(ss[0]);
+            const ss_end_time = Number(ss[1]);
+            
+            if (sj_start_time >= ss_start_time && sj_end_time <= ss_end_time) {
+              timeMatch = true;
+              break;
             }
-          }).length > 0 ||
-            searchData.time === "total")
-        );
-      })
-      .map((r) => {
-        // Use destructuring to create a new object without unwanted properties
-        const { ['cr_id(1)']: _, ...rest } = r;
-        return rest;
-      });
+          } else {
+            if (Number(fitem.substring(2, 4)) >= Number(searchData.time)) {
+              timeMatch = true;
+              break;
+            }
+          }
+        }
+        
+        if (!timeMatch) continue;
+      }
+      
+      // Create a new object without the unwanted property
+      const { ['cr_id(1)']: _, ...rest } = item;
+      searchResults.push(rest);
+    }
 
     try {
+      // Use pipelining for Redis operations
       const pipeline = redis.pipeline();
-      pipeline.set(searchData_, JSON.stringify(searchResults), 'EX', 30);
+      pipeline.set(searchData_, JSON.stringify(searchResults), 'EX', 60); // Increased cache time to 60 seconds
       pipeline.set(lastDataUpdatedKey, data_updated);
       await pipeline.exec();
     } catch (redisError) {
@@ -220,7 +265,24 @@ async function elysiaGetCoursesSpecific(context) {
     return "Internal Server Error";
   }
 }
+
+// Helper function to get uni_key (with caching)
+const uniKeyCache = new Map();
+async function getUniKey(uni_id) {
+  if (uniKeyCache.has(uni_id)) {
+    return uniKeyCache.get(uni_id);
+  }
   
+  const result = await db.query(
+    `SELECT LOWER(uni_key) as uni_key FROM university_detail WHERE uni_id = $1`,
+    [uni_id]
+  );
+  
+  const uni_key = result.rows[0].uni_key;
+  uniKeyCache.set(uni_id, uni_key);
+  return uni_key;
+}
+
 // Create Elysia app
 const app = new Elysia()
   .post('/university/:uni_id/course/:year/:semester', elysiaGetCoursesSpecific)

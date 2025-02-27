@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile.express
     # ports:
-    #   - "3030:3030"deploy:
+    #   - "3030:3030"
     deploy:
       replicas: 2
     environment:
