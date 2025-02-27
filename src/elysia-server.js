@@ -2,6 +2,7 @@
 require("dotenv").config();
 
 const { Elysia } = require("elysia");
+const { cors } = require('@elysiajs/cors');
 const db = require("./db");
 const redis = require("./redis");
 
@@ -282,8 +283,24 @@ async function getUniKey(uni_id) {
   return uni_key;
 }
 
-// Create Elysia app
+// Create Elysia app with CORS support
 const app = new Elysia()
+  // Add CORS plugin with appropriate configuration
+  .use(cors({
+    origin: [
+      'https://www.planriean.com',
+      'https://beta.planriean.com',
+      'https://dev.planriean.com',
+      'https://planriean.com',
+      'https://dev1.plutopon.me',
+      'http://localhost:3003'  // For local development
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Length', 'X-Requested-With'],
+    credentials: true,
+    maxAge: 86400  // 24 hours
+  }))
   .post('/university/:uni_id/course/:year/:semester', elysiaGetCoursesSpecific)
   .listen(ELYSIA_PORT);
 
