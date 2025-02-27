@@ -288,12 +288,7 @@ const app = new Elysia()
   // Add CORS plugin with appropriate configuration
   .use(cors({
     origin: [
-      'https://www.planriean.com',
-      'https://beta.planriean.com',
-      'https://dev.planriean.com',
-      'https://planriean.com',
-      'https://dev1.plutopon.me',
-      'http://localhost:3003'  // For local development
+      '*'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
