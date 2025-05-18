@@ -92,6 +92,14 @@ const getSubjectDetail = async (req, res) => {
 
     const subject = await db.query("SELECT * FROM courseset_subject WHERE uni_id = $1 AND suj_real_id = $2 LIMIT 1", [uni_id, suj_id]);
     // console.log(subject.rows);
+
+    if (subject.rows.length == 0) {
+        return res.json({
+            success: false,
+            message: "ไม่พบข้อมูลวิชา โปรดติดต่อทีมงาน"
+        });
+    }
+
     const faculty = await db.query(
         "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
         [subject.rows[0].uni_id, subject.rows[0].fac_id]
