@@ -38,6 +38,7 @@ const {
   getPlanSubjectsUser,
   deletePlanUser,
   updatePlanName,
+  updatePlanSettings,
 } = require("./routes/plan");
 const {
   getCoursesetDetail,
@@ -143,6 +144,7 @@ app.put("/plan/view/:plan_id/name", requireJWTAuth, updatePlanName);
 app.delete("/plan/view/:plan_id", requireJWTAuth, deletePlanUser);
 app.get("/plan/view/:plan_id/subject", requireJWTAuth, getPlanSubjectsUser);
 app.put("/plan/view/:plan_id/subject", requireJWTAuth, updatePlanSubjectsUser);
+app.put("/plan/view/:plan_id/settings", requireJWTAuth, updatePlanSettings);
 
 // v.2 old api - deprecated
 app.get("/course", getCourses);
