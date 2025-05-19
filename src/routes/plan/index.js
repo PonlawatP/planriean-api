@@ -204,6 +204,20 @@ async function createPlanUser(req, res) {
   }
 }
 async function updatePlanUser(req, res) {
+  const { plan_id } = req.params;
+  const plan_detail = await db.query(
+    `SELECT user_uid FROM plan_detail WHERE plan_id = $1 AND is_delete = false`,
+    [plan_id]
+  );
+
+  if (plan_detail.rows.length === 0) {
+    return res.status(404).json({ success: false, error: 404, msg: "Plan not found" });
+  }
+
+  const user = await getUserFromToken(req);
+  if (plan_detail.rows[0].user_uid !== user.uid) {
+    return res.status(403).json({ success: false, error: 403, msg: "Not authorized to update this plan" });
+  }
   try {
     const user = await getUserFromToken(req);
     const { plan_id } = req.params;
