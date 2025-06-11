@@ -1,11 +1,11 @@
 const db = require("../../db");
 const { templateGE } = require("../../utils/customs/msu");
-const { getUserFromToken, getUserFromUID } = require("../../utils/userutil");
+const { getUserFromRequest, getUserFromUID } = require("../../utils/userutil");
 
 /** TODO: Admin section */
 async function a_editCourseSetGroupDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_group_id } = req.params; // Extract uni_id and cr_group_id from the request parameters
     const { name_en, name_th } = req.body; // Extract name_en and name_th from the request body
 
@@ -36,7 +36,7 @@ async function a_editCourseSetGroupDetail(req, res) {
 
 async function a_addCoursesetGroupDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
     const { name_en, name_th } = req.body;
 
@@ -76,7 +76,7 @@ async function a_addCoursesetGroupDetail(req, res) {
 
 async function a_removeCoursesetGroupDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_group_id } = req.params;
 
     // Delete the courseset group
@@ -106,7 +106,7 @@ async function a_removeCoursesetGroupDetail(req, res) {
 async function a_addCoursesetSubjectRestrictedGroup(req, res) {
   // NOTED: logic check role on user. improve later
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     if (user != null) {
       const user_role = await getUserRole(user);
       if (

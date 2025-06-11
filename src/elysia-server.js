@@ -1,13 +1,17 @@
 // ElysiaJS server for high-concurrency endpoint
 require("dotenv").config();
 
+const { t } = require('elysia');
+
 const { Elysia } = require("elysia");
 const { cors } = require('@elysiajs/cors');
 const db = require("./db");
 const redis = require("./redis");
 
 // Import the course module
+const { getUserFromToken } = require("./utils/userutil");
 const courseModule = require("./routes/course");
+const planModule = require("./routes/plan");
 
 // Define the cache durations
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -82,14 +86,14 @@ async function getCoursesData(data) {
 const ELYSIA_PORT = process.env.ELYSIA_PORT || 3031;
 
 // Create a specialized version of getCoursesSpecific for Elysia
-async function elysiaGetCoursesSpecific(context) {
+async function elysiaGetCoursesSpecific(context, parameter = null, data = null) {
   try {
     // Add response compression
     // context.set.headers['Content-Encoding'] = 'gzip';
     
-    const { year, semester } = context.params;
-    const uni_id = context.params.uni_id || 1; // Get uni_id from params
-    let searchData = context.body;
+    const { year, semester } = parameter || context.params;
+    const uni_id = parameter?.uni_id || context.params.uni_id || 1; // Get uni_id from params
+    let searchData = data || context.body;
 
     if (searchData.type.length == 0) {
       searchData.type = ["004*"];
@@ -261,7 +265,9 @@ async function elysiaGetCoursesSpecific(context) {
     return { cached: false, updated: data_updated, subjects: searchResults };
   } catch (err) {
     console.error(err);
-    context.set.status = 500;
+    if (parameter == null && data == null) {
+      context.set.status = 500;
+    }
     return "Internal Server Error";
   }
 }
@@ -297,7 +303,91 @@ const app = new Elysia()
     maxAge: 86400  // 24 hours
   }))
   .post('/university/:uni_id/course/:year/:semester', elysiaGetCoursesSpecific)
+  .ws('/ws/planriean', {
+    // validate incoming message
+    body: t.Object({
+        message: t.String(),
+        plan_id: t.Optional(t.Number()),
+        parameter: t.Optional(t.Any()),
+        data: t.Optional(t.Any())
+    }),
+    headers: t.Object({
+      authorization: t.String()
+    }),
+    open(ws) {
+      console.log(`[open] user connected: ${ws.id}`);
+    },
+    async message(ws, raw_message) {
+      const { message, plan_id, parameter, data } = raw_message;
+      // console.log(`[msg from ${ws.id}]`, message);
+
+      let ws_session = null;
+
+      switch (message) {
+        case "register":
+          /* register websocket into redis session to reusing on token session (like. add/edit/remove subject) */
+          const { authorization } = ws.data.headers;
+          const { plan_id } = parameter;
+          ws.send({
+            message: "page_loading",
+            time: Date.now(),
+          });
+          const user = await getUserFromToken(authorization);
+
+          // register plan_id into redis session - no expiration
+          const redis_key = `planriean:plan_session:${ws.id}`;
+          ws_session = {
+            authorization: authorization,
+            user: user,
+            plan_id: plan_id,
+          };  
+          await redis.set(redis_key, JSON.stringify(ws_session));
+          
+          const plan_res = await planModule.getPlanUser(null, null, ws_session);
+          
+          ws.send({
+            plan_id,
+            result: plan_res,
+            message: "registered",
+            time: Date.now()
+          });
+
+          if (plan_res.success == false) {
+            ws.close();
+            return;
+          }
+          break;
+        case "update_plan_subjects":
+          if (ws_session == null) {
+            ws_session = JSON.parse(await redis.get(`planriean:plan_session:${ws.id}`));
+          }
+
+          const update_plan_result = await planModule.updatePlanSubjectsUser(null, null, ws_session, data);
+
+          ws.send({
+            result: update_plan_result,
+            message: "updated_plan_subjects",
+            time: Date.now()
+          });
+          break;
+        case "get_course_list":
+          const result = await courseModule.getCoursesSpecific(null, null, parameter, data);
+          ws.send({
+            result,
+            message,
+            time: Date.now()
+          });
+          break;
+      }
+    },
+    async close(ws) {
+      console.log(`[close] ${ws.id} disconnected`);
+      const redis_key = `planriean:plan_session:${ws.id}`;
+      await redis.del(redis_key);
+    }
+  })
   .listen(ELYSIA_PORT);
 
 console.log(`🦊 ElysiaJS server running at http://${app.server?.hostname}:${app.server?.port}`);
 console.log(`High-concurrency endpoint available at: http://${app.server?.hostname}:${app.server?.port}/university/:uni_id/course/:year/:semester`); 
+console.log(`WebSocket endpoint available at: ws://${app.server?.hostname}:${app.server?.port}/ws/planriean`);

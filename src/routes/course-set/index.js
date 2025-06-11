@@ -1,13 +1,13 @@
 const db = require("../../db");
 const redis = require("../../redis");
 const { templateGE } = require("../../utils/customs/msu");
-const { getUserFromToken, getUserFromUID } = require("../../utils/userutil");
+const { getUserFromRequest, getUserFromUID } = require("../../utils/userutil");
 const { getSubjectDataFromPlanRestrictSubject } = require("../plan-restrict");
 const CACHE_DURATION = 60 * 60; // 1 hour in seconds
 
 async function getCoursesetDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { cr_id } = req.params;
     if (user != null) {
       const crs = await db.query(
@@ -61,7 +61,7 @@ async function getCoursesetDetail(req, res) {
 }
 async function getCoursesetMapping(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { cr_id } = req.params;
 
     if (user != null) {
@@ -138,7 +138,7 @@ async function getCoursesetMapping(req, res) {
 }
 async function getCoursesetSubject(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { cr_id } = req.params;
     if (user != null) {
       const crs = await db.query(
@@ -252,10 +252,10 @@ async function getCoursesetSubject(req, res) {
   }
 }
 
-async function getCoursesetSubjectRestricted(req) {
+async function getCoursesetSubjectRestricted(req, ws_session = null) {
   try {
-    const user = await getUserFromToken(req);
-    const { plan_id } = req.params;
+    const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
+    const { plan_id } = ws_session != null ? ws_session : req.params;
 
     let plan_restrict = null;
     if (user != null || user.std_start_year == null) {
@@ -447,7 +447,7 @@ async function getLectureGroups(req, res) {
 /** TODO: Admin section */
 async function a_addCoursesetDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
     const {
       name_th,
@@ -506,7 +506,7 @@ async function a_addCoursesetDetail(req, res) {
 
 async function a_removeCoursesetDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id } = req.params;
 
     // Delete the courseset detail
@@ -535,7 +535,7 @@ async function a_removeCoursesetDetail(req, res) {
 
 async function a_editCoursesetDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id } = req.params;
     const {
       name_th,
@@ -590,7 +590,7 @@ async function a_editCoursesetDetail(req, res) {
 // Course set header
 async function a_addCoursesetHeader(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id } = req.params;
     const {
       fac_id,
@@ -646,7 +646,7 @@ async function a_addCoursesetHeader(req, res) {
 
 async function a_removeCoursesetHeader(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id, cr_head_id } = req.params;
 
     // Delete the courseset header
@@ -675,7 +675,7 @@ async function a_removeCoursesetHeader(req, res) {
 
 async function a_editCoursesetHeader(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id, cr_head_id } = req.params;
     const {
       fac_id,
@@ -742,7 +742,7 @@ async function a_editCoursesetHeader(req, res) {
 // Course set subject
 async function a_addCoursesetSubject(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id } = req.params;
     const {
       fac_id,
@@ -809,7 +809,7 @@ async function a_addCoursesetSubject(req, res) {
 
 async function a_removeCoursesetSubject(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id, suj_id } = req.params;
 
     // Delete the courseset subject
@@ -838,7 +838,7 @@ async function a_removeCoursesetSubject(req, res) {
 
 async function a_editCoursesetSubject(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id, suj_id } = req.params;
     const {
       fac_id,
@@ -888,7 +888,7 @@ async function a_editCoursesetSubject(req, res) {
 
 async function a_editCoursesetMapping(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_id } = req.params;
     const newData = req.body; // Assuming the new data is sent in the request body
 
@@ -940,7 +940,7 @@ async function a_editCoursesetMapping(req, res) {
 
 async function a_addCoursesetSubjectRestrictedGroup(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     if (user != null) {
       const user_role = await getUserRole(user);
       if (

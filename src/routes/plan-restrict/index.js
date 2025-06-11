@@ -1,11 +1,11 @@
 const jwt = require("jwt-simple");
 const db = require("../../db");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 const { createDbDate } = require("../../utils/dateutil");
 
 async function getPlanRestricted(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { restgrp_id } = req.params;
 
     // old data
@@ -49,7 +49,7 @@ async function getPlanRestricted(req, res) {
 }
 async function updatePlanRestricted(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
     const {
       plan_name,
@@ -94,7 +94,7 @@ async function updatePlanRestricted(req, res) {
 }
 async function getPlanSubjectsRestricted(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
 
     const result = await db.query(
@@ -123,7 +123,7 @@ async function getPlanSubjectsRestricted(req, res) {
 }
 async function updatePlanSubjectsRestricted(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { restgrp_id } = req.params;
     const { subjects } = req.body;
 
@@ -177,7 +177,7 @@ async function updatePlanSubjectsRestricted(req, res) {
 // New function to wrap the previously loose code
 async function updatePlanSubjects(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
     const { subjects } = req.body;
     // console.log(subjects);

@@ -1,14 +1,14 @@
 const db = require("../../db");
 const redis = require("../../redis");
 const { getCurrentSeason } = require("../../utils/seasonutil");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 
 
 const getSubjectReviewByRealId = async (req, res) => {
     const { uni_id, suj_id } = req.params;
     const review = await db.query("SELECT subject_review.*, user_detail.username, concat(std_name, ' ', std_surname) AS std_name, user_detail.image FROM subject_review LEFT JOIN user_detail ON subject_review.uid = user_detail.uid WHERE subject_review.uni_id = $1 AND subject_review.suj_real_code = $2", [uni_id, suj_id]);
 
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     const sum_term = await db.query("SELECT code, year, semester, sec, lecturer FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2", [uni_id, suj_id]);
 
@@ -61,7 +61,7 @@ const getSubjectReviewByRealId = async (req, res) => {
 const getSubjectDetail = async (req, res) => {
     const { uni_id, suj_id } = req.params;
     const { semester = null, year = null } = req.query;
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     const result_updated = await db.query(
         `SELECT LOWER(uni_key) as uni_key, to_char(
@@ -195,7 +195,7 @@ const getSubjectDetail = async (req, res) => {
 
 async function a_addSubjectReview(req, res) {
     const { uni_id, suj_id } = req.params;
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { content, images = [], rate, term, sec, anonymous } = req.body;
 
     const validate = validateReviewInput(req.body);
@@ -266,7 +266,7 @@ async function a_addSubjectReview(req, res) {
 
 async function a_editSubjectReview(req, res) {
     const { uni_id, suj_id } = req.params;
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { content, images = [], rate, term, sec, anonymous } = req.body;
 
     const validate = validateReviewInput(req.body);
@@ -332,7 +332,7 @@ async function a_editSubjectReview(req, res) {
 
 async function a_deleteSubjectReview(req, res) {
     const { uni_id, suj_id } = req.params;
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     try {
         const deleteResult = await db.query(

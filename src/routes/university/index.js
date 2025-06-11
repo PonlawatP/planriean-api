@@ -5,7 +5,7 @@ const {
   getCurrentSeason,
   getSeasonRemaining,
 } = require("../../utils/seasonutil");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 
 async function getUniversityList(req, res) {
   try {
@@ -254,7 +254,7 @@ async function getUniversityDetailWithNameFunc(uni_name) {
 /** Admin section: university */
 async function addUniversityDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     const { uni_key, uni_name_th, uni_name_en, uni_logo } = req.body;
 
@@ -292,7 +292,7 @@ async function addUniversityDetail(req, res) {
 }
 async function removeUniversityDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
 
     const deleteResult = await db.query(
@@ -320,7 +320,7 @@ async function removeUniversityDetail(req, res) {
 
 async function editUniversityDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
     const { uni_key, uni_name_th, uni_name_en, enabled, uni_logo } = req.body;
 
@@ -350,7 +350,7 @@ async function editUniversityDetail(req, res) {
 /** Admin section: faculty */
 async function addFacultyDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     const { uni_id } = req.params;
     const {
@@ -401,7 +401,7 @@ async function addFacultyDetail(req, res) {
 }
 async function removeFacultyDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, fac_id } = req.params;
 
     const deleteResult = await db.query(
@@ -429,7 +429,7 @@ async function removeFacultyDetail(req, res) {
 
 async function editFacultyDetail(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, fac_id } = req.params;
     const {
       fac_key,

@@ -1,12 +1,13 @@
 const jwt = require("jwt-simple");
 const db = require("../../db");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 const { createDbDate } = require("../../utils/dateutil");
 const { getUniversityDetailWithNameFunc } = require("../university");
 const { getCoursesetSubjectRestricted } = require("../course-set");
+
 async function isPlanOwner(req) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
 
     const result = await db.query(
@@ -22,7 +23,7 @@ async function isPlanOwner(req) {
 
 async function getListPlanUser(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     if (user == null) {
       res.status(400).send("User Not Found");
@@ -73,23 +74,35 @@ async function getListPlanUser(req, res) {
   }
 }
 
-async function getSubjectDataFromPlanSubject(plan_id, year, semester) {
+async function getSubjectDataFromPlanSubject(plan_id, year, semester, force_subjects_data = null) {
   // ดึงรายวิชาที่แผนการเรียนนี้เลือก
-  const result_subjects = await db.query(
+  const result_subjects = force_subjects_data != null ? {rows: force_subjects_data.map((s) => {
+    return {
+      code: s[3],
+      sec: s[4],
+    };
+  })} : await db.query(
     `SELECT * FROM plan_subject WHERE plan_id = $1;`,
     [plan_id]
   );
+  const subjects_query = result_subjects.rows.map((s) => {
+    return {
+      code: s.code,
+      sec: s.sec,
+    };
+  });
+  
   // ดึงข้อมูลรายวิชาที่ออกในปี/เทอมที่แผนการเรียนเลือก
   const data_course_detail = await db.query(
-    "SELECT * FROM course_detail WHERE year = $1 AND semester = $2",
-    [year, semester]
+    "SELECT * FROM course_detail WHERE year = $1 AND semester = $2 AND (code, sec) IN (SELECT code, sec FROM plan_subject WHERE plan_id = $3)",
+    [year, semester, plan_id]
   );
 
   const subjects_res = result_subjects.rows
     .map((s) => {
       // ดึงข้อมูลจากรหัสวิชา
       const ref_subject = data_course_detail.rows.find(
-        (c) => c.code == s.code && c.semester == s.seamster && c.sec == s.sec
+        (c) => c.code == s.code && c.sec == s.sec
       );
       if (ref_subject != null) {
         return {
@@ -105,11 +118,12 @@ async function getSubjectDataFromPlanSubject(plan_id, year, semester) {
   return subjects_res;
 }
 
-async function getPlanUser(req, res) {
+async function getPlanUser(req, res, ws_session = null) {
   try {
-    const user = await getUserFromToken(req);
-    const { plan_id } = req.params;
+    const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
+    const { plan_id } = ws_session != null ? ws_session : req.params;
 
+    console.log({user, plan_id});
     const result = await db.query(
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]
@@ -122,7 +136,7 @@ async function getPlanUser(req, res) {
         plan_detail.cr_seamseter
       );
 
-      const restricted = await getCoursesetSubjectRestricted(req);
+      const restricted = await getCoursesetSubjectRestricted(req, ws_session);
 
       const plan_res = {
         detail: plan_detail,
@@ -131,10 +145,19 @@ async function getPlanUser(req, res) {
       };
 
       if (plan_detail.user_uid == user.uid) {
+        if (ws_session != null) {
+          return plan_res;
+        }
         res.json(plan_res);
       } else if (plan_detail.status == "public") {
+        if (ws_session != null) {
+          return plan_res;
+        }
         res.json(plan_res);
       } else {
+        if (ws_session != null) {
+          return { success: false, error: 403, msg: "Plan Not Allow To Aceess" };
+        }
         res.status(403).json({
           success: false,
           error: 403,
@@ -142,19 +165,26 @@ async function getPlanUser(req, res) {
         });
       }
     } else {
+      if (ws_session != null) {
+        return { success: false, error: 404, msg: "Plan Not Found" };
+      }
+      
       res
         .status(404)
         .json({ success: false, error: 404, msg: "Plan Not Found" });
     }
   } catch (err) {
     console.error(err);
+    if (ws_session != null) {
+      return { success: false, error: 500, msg: "Server Sad" };
+    }
     res.status(500).send("Server Sad");
   }
 }
 
 async function createPlanUser(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const date = createDbDate();
     const {
       plan_name,
@@ -214,12 +244,12 @@ async function updatePlanUser(req, res) {
     return res.status(404).json({ success: false, error: 404, msg: "Plan not found" });
   }
 
-  const user = await getUserFromToken(req);
+  const user = await getUserFromRequest(req);
   if (plan_detail.rows[0].user_uid !== user.uid) {
     return res.status(403).json({ success: false, error: 403, msg: "Not authorized to update this plan" });
   }
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
     const {
       plan_name,
@@ -275,12 +305,12 @@ async function updatePlanSettings(req, res) {
     return res.status(404).json({ success: false, error: 404, msg: "Plan not found" });
   }
 
-  const user = await getUserFromToken(req);
+  const user = await getUserFromRequest(req);
   if (plan_detail.rows[0].user_uid !== user.uid) {
     return res.status(403).json({ success: false, error: 403, msg: "Not authorized to update this plan" });
   }
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
     const {
       plan_settings,
@@ -301,7 +331,7 @@ async function updatePlanSettings(req, res) {
 }
 async function updatePlanName(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
     const { plan_name } = req.body;
 
@@ -330,7 +360,7 @@ async function updatePlanName(req, res) {
 // function to duplicate whole plan_subject and plan_detail by plan_id (and edit name using plan_name)
 async function duplicatePlan(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
     const { plan_name, cr_year, cr_seamseter, cr_id, std_year, uni_id, fac_id, major_id, plan_color, plan_img, plan_dark, is_folder, ref_folder_plan_id, date, plan_settings } = req.body;
     const result = await db.query(
@@ -347,7 +377,7 @@ async function duplicatePlan(req, res) {
 
 async function getPlanSubjectsUser(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { plan_id } = req.params;
 
     const result = await db.query(
@@ -374,12 +404,11 @@ async function getPlanSubjectsUser(req, res) {
       .json({ success: false, error: error.code, msg: error.detail });
   }
 }
-async function updatePlanSubjectsUser(req, res) {
+async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = null) {
   try {
-    const user = await getUserFromToken(req);
-    const { plan_id } = req.params;
-    const { subjects } = req.body;
-    // console.log(subjects);
+    const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
+    const { plan_id } = ws_session != null ? ws_session : req.params;
+    const { subjects } = ws_body != null ? ws_body : req.body;
     const result = await db.query(
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]
@@ -388,6 +417,10 @@ async function updatePlanSubjectsUser(req, res) {
       const plan_detail = result.rows[0];
       // ไม่ให้ user id อื่นอัพเดตข้อมูลได้
       if (plan_detail.user_uid != user.uid) {
+        if (ws_session != null) {
+          return { success: false, error: 403, msg: "Plan Forbidden" }
+        }
+
         return res
           .status(403)
           .json({ success: false, error: 403, msg: "Plan Forbidden" });
@@ -396,6 +429,7 @@ async function updatePlanSubjectsUser(req, res) {
       // reset ข้อมูลรายวิชาในแผนเรียนนั้นก่อนทำขั้นตอนต่อไป
       await db.query(`DELETE FROM plan_subject WHERE plan_id = $1;`, [plan_id]);
 
+      let values = [];
       if (subjects.length > 0) {
         // เอาข้อมูลบางส่วนที่ไม่ได้ส่งมากับ body ยัดใส่ก่อนสร้าง sql placeholder
         const sjs = subjects.map((s) => {
@@ -414,7 +448,7 @@ async function updatePlanSubjectsUser(req, res) {
                 INSERT INTO "plan_subject" (plan_id, year, seamster, code, sec, mute_alert, uni_id) 
                 VALUES ${sql_placeholders}
             ;`;
-        const values = subjects.flatMap((subject) => [
+        values = subjects.flatMap((subject) => [
           plan_id,
           subject.year,
           subject.semester,
@@ -437,16 +471,26 @@ async function updatePlanSubjectsUser(req, res) {
       const subjects_res = await getSubjectDataFromPlanSubject(
         plan_id,
         plan_detail.cr_year,
-        plan_detail.cr_seamseter
+        plan_detail.cr_seamseter,
+        values
       );
+      if (ws_session != null) {
+        return { success: true, result: subjects_res };
+      }
       res.json({ success: true, result: subjects_res });
     } else {
+      if (ws_session != null) {
+        return { success: false, error: 404, msg: "Plan Not Found" };
+      }
       res
         .status(404)
         .json({ success: false, error: 404, msg: "Plan Not Found" });
     }
   } catch (err) {
     console.log(err);
+    if (ws_session != null) {
+      return { success: false, error: err.code, msg: err.detail };
+    }
     res.status(400).json({ success: false, error: err.code, msg: err.detail });
   }
 }

@@ -1,9 +1,9 @@
 const db = require("../../db");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 
 async function getCourseRestrictGroups(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
     let { cr_id = -1 } = req.query;
     cr_id = cr_id == "" ? -1 : cr_id;
@@ -56,7 +56,7 @@ async function getCourseRestrictGroups(req, res) {
 
 async function getCourseRestrictGroupData(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     if (user != null) {
       const result = await db.query(
@@ -127,7 +127,7 @@ async function getCourseRestrictGroupData(req, res) {
 
 async function a_addCourseRestrictGroup(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
     const { cr_id, name_en, name_th, std_year, term } = req.body;
 
@@ -167,7 +167,7 @@ async function a_addCourseRestrictGroup(req, res) {
 
 async function a_editCourseRestrictGroup(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { name_en, name_th, std_year, term } = req.body;
 
@@ -206,7 +206,7 @@ async function a_editCourseRestrictGroup(req, res) {
 
 async function a_removeCourseRestrictGroup(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
 
     if (user != null) {
@@ -257,7 +257,7 @@ async function a_removeCourseRestrictGroup(req, res) {
 
 async function a_addCourseRestrictGroupUsers(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { users } = req.body; // Assuming you pass an array of user IDs in the request body
 
@@ -308,7 +308,7 @@ async function a_addCourseRestrictGroupUsers(req, res) {
 
 async function a_removeCourseRestrictGroupUsers(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { users } = req.body; // Array of user IDs to remove
 
@@ -346,7 +346,7 @@ async function a_removeCourseRestrictGroupUsers(req, res) {
 
 async function a_updateCourseRestrictGroupUsers(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { users } = req.body; // Array of user IDs to update
 
@@ -405,7 +405,7 @@ async function a_updateCourseRestrictGroupUsers(req, res) {
 
 async function a_addCourseRestrictGroupSubjects(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { subjects } = req.body; // Assuming an array of subject objects in the request body
 
@@ -455,7 +455,7 @@ async function a_addCourseRestrictGroupSubjects(req, res) {
 
 async function a_removeCourseRestrictGroupSubjects(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { subjects } = req.body; // Array of subject objects to remove
 
@@ -503,7 +503,7 @@ async function a_removeCourseRestrictGroupSubjects(req, res) {
 
 async function a_updateCourseRestrictGroupSubjects(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
     const { subjects } = req.body; // Array of subject objects to update
 

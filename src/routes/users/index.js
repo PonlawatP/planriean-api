@@ -1,6 +1,6 @@
 const {
   getUsers,
-  getUserFromToken,
+  getUserFromRequest,
   getUserFromUID,
 } = require("../../utils/userutil");
 const db = require("../../db");
@@ -39,7 +39,7 @@ async function a_addUserRole(req, res) {
     const { param_uni_id, uid } = req.params;
     const { uni_id, fac_id, major_id, role } = req.body;
 
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const targetUser = await getUserFromUID(uid);
 
     const actLargestRole = getLargestRole(user.roles);
@@ -128,7 +128,7 @@ async function a_editUserRole(req, res) {
   try {
     const { param_uni_id, uid } = req.params;
 
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const actLargestRole = getLargestRole(user.roles);
 
     const { old, edit } = req.body;
@@ -145,7 +145,7 @@ async function a_deleteUserRole(req, res) {
   try {
     const { param_uni_id, uid } = req.params;
 
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const actLargestRole = getLargestRole(user.roles);
 
     // Remove role

@@ -1,9 +1,9 @@
 const db = require("../../db");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 
 async function getRegisterIntevals(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { uni_id } = req.params;
 
     if (user != null) {
@@ -96,7 +96,7 @@ async function getRegisterIntevals(req, res) {
 }
 async function a_manageRegisterYear(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     if (user != null) {
       const { uni_id } = req.params; // For edit, uni_id is required in the URL
@@ -212,7 +212,7 @@ async function a_manageRegisterYear(req, res) {
 }
 async function a_manageRegisterSemester(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     if (user != null) {
       const { uni_id, year } = req.params; // For edit, uni_id is required in the URL
@@ -324,7 +324,7 @@ async function a_manageRegisterSemester(req, res) {
 
 async function a_manageRegisterTimeline(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     if (user != null) {
       const { uni_id, year, semester } = req.params;
@@ -476,7 +476,7 @@ async function a_manageRegisterTimeline(req, res) {
 
 async function a_manageRegisterSubTimeline(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
 
     if (user != null) {
       const { uni_id, year, semester } = req.params;

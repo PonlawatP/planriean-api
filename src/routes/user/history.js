@@ -1,10 +1,10 @@
 const db = require("../../db");
-const { getUserFromToken } = require("../../utils/userutil");
+const { getUserFromRequest } = require("../../utils/userutil");
 
 // TODO: ถ้าเราเพิ่มรายวิชานอกแผน ระบบจะยังหาไม่เห็น อาจจะต้องมีตัวแปรเข้ามาเพิ่มเพื่อกำหนดว่าเราเรียนตอนปีไหน ล่ะมั้งนะ
 async function getUserSubjectHistory(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { id } = req.params;
     if (user != null) {
       const crs = await db.query(
@@ -61,7 +61,7 @@ async function getUserSubjectHistory(req, res) {
 
 async function updateUserSubjectHistory(req, res) {
   try {
-    const user = await getUserFromToken(req);
+    const user = await getUserFromRequest(req);
     const { subjects } = req.body;
     if (user != null) {
       const subj_sql = [];

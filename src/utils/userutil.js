@@ -30,7 +30,52 @@ async function getUser(username, show_passwd = false) {
     return null;
   }
 }
-async function getUserFromToken(req, show_passwd = false) {
+
+async function getUserFromToken(token, show_passwd = false) {
+  try {
+    const jwt_dc = jwt.decode(
+      token,
+      process.env.SECRET_JWT
+    );
+
+    let result;
+
+    if (jwt_dc?.login_with == "auth-msu") {
+      result = await db.query(
+        "SELECT * FROM user_detail WHERE auth_reg_username = $1",
+        [jwt_dc.auth_reg_username]
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : jwt_dc.sub != null ? 'username' : 'email'} = ${jwt_dc.uid != null ? '$1' : jwt_dc.sub != null ? '$1' : 'LOWER($1)'}`,
+        [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.sub != null ? jwt_dc.sub : jwt_dc.email]
+      );
+    }
+
+    if (result.rows.length == 0) {
+      return null;
+    }
+
+    const roles = await getUserRoles(result.rows[0]);
+
+    const plancount = await db.query(
+      "SELECT CAST(COUNT(*) AS INT) FROM plan_detail WHERE user_uid = $1 AND is_delete = false",
+      [result.rows[0].uid]
+    );
+
+    return show_passwd
+      ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
+      : {
+        ...result.rows[0],
+        password: undefined,
+        plan_created: plancount.rows[0].count,
+        roles,
+      };
+  } catch (err) {
+    return null;
+  }
+}
+async function getUserFromRequest(req, show_passwd = false) {
   try {
     const jwt_dc = jwt.decode(
       req.headers["authorization"],
@@ -528,6 +573,7 @@ const encryptPassword = async (password = "") => {
 module.exports = {
   getUsers,
   getUser,
+  getUserFromRequest,
   getUserFromToken,
   getUserFromUID,
   getUserRoles,

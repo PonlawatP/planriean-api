@@ -99,10 +99,10 @@ async function getCourses(req, res) {
 // NOTED: temporary cache for user search data only
 // let lastDataUpdatedCacheTime = null;
 
-async function getCoursesSpecific(req, res) {
+async function getCoursesSpecific(req, res, parameter = null, data = null) {
   try {
-    const { uni_id = 1, year, semester } = req.params;
-    let searchData = req.body;
+    const { uni_id = 1, year, semester } = parameter || req.params;
+    let searchData = data || req.body;
 
     if (searchData.type.length == 0) {
       searchData.type = ["004*"];
@@ -162,6 +162,9 @@ async function getCoursesSpecific(req, res) {
     if (lastDataUpdatedCacheTime == data_updated) {
       const cachedData = await redis.get(searchData_);
       if (cachedData) {
+        if (parameter != null || data != null) {
+          return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
+        }
         return res.json({ cached: true, updated: data_updated, subjects: JSON.parse(cachedData) });
       }
     }
@@ -284,6 +287,10 @@ async function getCoursesSpecific(req, res) {
       await pipeline.exec();
     } catch (redisError) {
       console.error('Redis pipeline failed:', redisError);
+    }
+
+    if (parameter != null || data != null) {
+      return { cached: false, updated: data_updated, subjects: searchResults };
     }
 
     res.json({ cached: false, updated: data_updated, subjects: searchResults });
