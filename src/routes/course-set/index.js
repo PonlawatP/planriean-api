@@ -254,6 +254,11 @@ async function getCoursesetSubject(req, res) {
 
 async function getCoursesetSubjectRestricted(req, ws_session = null) {
   try {
+    // checks ws_session is next function on express parameter. if it is. force it to null
+    if(ws_session instanceof Function){
+      ws_session = null;
+    }
+    
     const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
     const { plan_id } = ws_session != null ? ws_session : req.params;
 

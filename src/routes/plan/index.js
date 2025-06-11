@@ -120,10 +120,14 @@ async function getSubjectDataFromPlanSubject(plan_id, year, semester, force_subj
 
 async function getPlanUser(req, res, ws_session = null) {
   try {
+    // checks ws_session is next function on express parameter. if it is. force it to null
+    if(ws_session instanceof Function){
+      ws_session = null;
+    }
+    
     const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
     const { plan_id } = ws_session != null ? ws_session : req.params;
 
-    console.log({user, plan_id});
     const result = await db.query(
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]
@@ -406,6 +410,11 @@ async function getPlanSubjectsUser(req, res) {
 }
 async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = null) {
   try {
+    // checks ws_session is next function on express parameter. if it is. force it to null
+    if(ws_session instanceof Function){
+      ws_session = null;
+    }
+    
     const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
     const { plan_id } = ws_session != null ? ws_session : req.params;
     const { subjects } = ws_body != null ? ws_body : req.body;
