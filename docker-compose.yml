@@ -23,8 +23,8 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
     extra_hosts:
-      - "planriean-db:100.111.100.50"
-      - "planriean-redis:100.111.100.50"
+      - "planriean-db:45.91.133.140"
+      - "planriean-redis:45.91.133.140"
     networks:
       - nginx_planriean
 
@@ -50,8 +50,8 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
     extra_hosts:
-      - "planriean-db:100.111.100.50"
-      - "planriean-redis:100.111.100.50"
+      - "planriean-db:45.91.133.140"
+      - "planriean-redis:45.91.133.140"
     networks:
       - nginx_planriean
 
@@ -67,8 +67,8 @@ services:
       - elysia
     restart: unless-stopped
     extra_hosts:
-      - "planriean-db:100.111.100.50"
-      - "planriean-redis:100.111.100.50"
+      - "planriean-db:45.91.133.140"
+      - "planriean-redis:45.91.133.140"
     networks:
       - nginx_planriean
   
@@ -84,8 +84,8 @@ services:
       - elysia
     restart: unless-stopped
     extra_hosts:
-      - "planriean-db:100.111.100.50"
-      - "planriean-redis:100.111.100.50"
+      - "planriean-db:45.91.133.140"
+      - "planriean-redis:45.91.133.140"
     networks:
       - nginx_planriean
 
