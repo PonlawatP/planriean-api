@@ -158,7 +158,7 @@ async function updateUser(req, res) {
         "email" = $8, 
         "username" = $9,
         "image" = $10
-      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : "uid"} = $11;`,
+      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.uid ? "uid" : "email"} = $11;`,
       [
         sanitizedUniId,
         sanitizedFacId,
@@ -170,11 +170,12 @@ async function updateUser(req, res) {
         sanitizedEmail,
         sanitizedUsername,
         sanitizedImage,
-        jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.uid,
+        jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.uid ? jwt_dc.uid : jwt_dc.email,
       ]
     );
 
-    const result = jwt_dc.login_with == "auth-msu" ? await getUserFromAuthMSU(jwt_dc.auth_reg_username) : await getUserFromUID(jwt_dc.uid)
+    const result = jwt_dc.login_with == "auth-msu" ? await getUserFromAuthMSU(jwt_dc.auth_reg_username) : (await getUserFromUID(jwt_dc.uid) || await getUserFromGoogle(jwt_dc.email))
+
     res.json(result);
     return true;
   } catch (error) {
