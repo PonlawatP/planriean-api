@@ -10,7 +10,7 @@ const getSubjectReviewByRealId = async (req, res) => {
 
     const user = await getUserFromRequest(req);
 
-    const sum_term = await db.query("SELECT code, year, semester, sec, lecturer FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2", [uni_id, suj_id]);
+    const sum_term = await db.query("SELECT code, year, semester, sec FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2", [uni_id, suj_id]);
 
     const own_review = user == undefined ? undefined : review.rows.find(review => review.uid == user.uid);
     const pre_review_owned = user == undefined ? null : { ...own_review, sec_detail: own_review == undefined ? undefined : sum_term.rows.find(term => term.semester == own_review.std_semester && term.year == own_review.std_year && term.sec == own_review.sec) };
@@ -74,7 +74,7 @@ const getSubjectDetail = async (req, res) => {
     const uni_key = result_updated.rows[0].uni_key;
 
     // Create cache key
-    const cacheKey = `planriean-${uni_key}:subject:${suj_id}:${year || 'no_y'}-${semester || 'no_sme'}`;
+    const cacheKey = `planriean-${uni_key}:subject:${suj_id}:${year || 'no_y'}-${semester || 'no_sme'}:pdpa-v1`;
 
     const review = await getSubjectReviewByRealId(req, null);
 
@@ -117,7 +117,7 @@ const getSubjectDetail = async (req, res) => {
 
     const suj_exam = year == null || semester == null ? { exam_mid: null, exam_final: null } : (await db.query("SELECT exam_mid, exam_final FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2 AND semester = $3 AND year = $4 LIMIT 1", [uni_id, suj_id, semester, year])).rows[0];
 
-    const sum_term = await db.query("SELECT code, year, semester, sec, lecturer as sum_term FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2", [uni_id, suj_id]);
+    const sum_term = await db.query("SELECT code, year, semester, sec FROM course_detail WHERE uni_id = $1 AND suj_real_code = $2", [uni_id, suj_id]);
 
     const seasons = await db.query(`
         SELECT
@@ -144,7 +144,6 @@ const getSubjectDetail = async (req, res) => {
         if (existingTerm) {
             existingTerm.secs.push({
                 sec: row.sec,
-                lecturer: row.sum_term
             });
         } else {
             acc.push({
@@ -153,7 +152,6 @@ const getSubjectDetail = async (req, res) => {
                 _semester: row.semester,
                 secs: [{
                     sec: row.sec,
-                    lecturer: row.sum_term
                 }]
             });
         }

@@ -66,9 +66,10 @@ async function getCoursesData(data) {
     course_detail.credit,
     course_detail.TIME,
     course_detail.sec,
-    course_detail.lecturer,
     course_detail.exam_mid,
     course_detail.exam_final,
+    course_detail.exam_mid_override,
+    course_detail.exam_final_override,
     course_detail.cr_id,
     course_detail.suj_real_code
   FROM
@@ -155,7 +156,7 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
     const data_updated = result_updated.rows[0].formatted_date;
     const uni_key = result_updated.rows[0].uni_key;
 
-    const searchData_ = `planriean-${uni_key}:subjs:${year}-${semester}:${searchData.type.join(",")}-${searchData.code.join(",")}-${searchData.date.join(",")}-${searchData.master.join(",")}-${searchData.time}`;
+    const searchData_ = `planriean-${uni_key}:subjs:${year}-${semester}:${searchData.type.join(",")}-${searchData.code.join(",")}-${searchData.date.join(",")}-${searchData.time}:pdpa-v1`;
     const lastDataUpdatedKey = `planriean-${uni_key}:subjs:dataUpdated`;
     const lastDataUpdatedCacheTime = await redis.get(lastDataUpdatedKey);
 
@@ -247,9 +248,6 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
           //   searchData.code.length == 0) &&
           (searchData.date.includes(item.time.substring(0, 2)) ||
             searchData.date.length == 0) &&
-          (searchData.master.length == 0 ||
-            searchData.master.filter((m) => item.lecturer.includes(m)).length >
-            0) &&
           // if has more than 1 day it will check iterable
           (item.time.split(";").filter((fitem) => {
             // time filter had been ranged

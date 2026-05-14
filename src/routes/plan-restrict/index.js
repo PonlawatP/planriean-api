@@ -272,8 +272,9 @@ async function getSubjectDataFromPlanRestrictSubject(restgrp_id, year, semester)
         (c) => c.code == s.suj_id && c.semester == semester && c.sec == s.sec
       );
       if (ref_subject != null) {
+        const { lecturer, ...refSansLecturer } = ref_subject;
         return {
-          ...ref_subject,
+          ...refSansLecturer,
           cr_id: undefined,
         };
       } else {

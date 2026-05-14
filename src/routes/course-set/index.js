@@ -413,36 +413,8 @@ async function getSubjectGroups(req, res) {
 
 async function getLectureGroups(req, res) {
   try {
-    const { uni_id = 1, year, semester } = req.params;
-    // console.log(year, semester);
-    // return;
-    // if (user != null) {
-    let crs_ltrs = await db.query(
-      "SELECT lecturer from course_detail WHERE year = $1 and semester = $2 AND uni_id = $3 GROUP BY lecturer;",
-      [year, semester, uni_id]
-    );
-
-    crs_ltrs = crs_ltrs.rows
-      .map((l) => {
-        return { l: l.lecturer.split(" / ") };
-      })
-      .flatMap((l) => l.l)
-      .filter((l) => l != "");
-
-    const uniqueNames = Array.from(new Set(crs_ltrs));
-
-    // console.log(uniqueNames);
-
-    const result = {
-      data: uniqueNames,
-    };
-    res.json(result);
-    // } else {
-    //   throw new Error("error!");
-    // }
-    // } else {
-    //   throw new Error("error!");
-    // }
+    // PDPA: do not expose instructor names via public API
+    res.json({ data: [] });
   } catch (err) {
     console.error(err);
     res.status(404).send("Courseset Not Found");

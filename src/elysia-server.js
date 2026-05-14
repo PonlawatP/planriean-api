@@ -63,7 +63,6 @@ async function getCoursesData(data) {
     course_detail.credit,
     course_detail.TIME,
     course_detail.sec,
-    course_detail.lecturer,
     course_detail.exam_mid,
     course_detail.exam_final,
     course_detail.cr_id,
@@ -101,7 +100,7 @@ async function elysiaGetCoursesSpecific(context, parameter = null, data = null) 
 
     // Create cache key early to check cache first (fastest path)
     const uni_key = await getUniKey(uni_id);
-    const searchData_ = `planriean-${uni_key}:subjs:${year}-${semester}:${searchData.type.join(",")}-${searchData.code.join(",")}-${searchData.date.join(",")}-${searchData.master.join(",")}-${searchData.time}`;
+    const searchData_ = `planriean-${uni_key}:subjs:${year}-${semester}:${searchData.type.join(",")}-${searchData.code.join(",")}-${searchData.date.join(",")}-${searchData.time}:pdpa-v1`;
     const lastDataUpdatedKey = `planriean-${uni_key}:subjs:dataUpdated`;
     
     // Check cache first (fastest path)
@@ -203,17 +202,6 @@ async function elysiaGetCoursesSpecific(context, parameter = null, data = null) 
       // Skip early if possible
       if (searchData.date.length > 0 && !searchData.date.includes(item.time.substring(0, 2))) {
         continue;
-      }
-      
-      if (searchData.master.length > 0) {
-        let found = false;
-        for (const m of searchData.master) {
-          if (item.lecturer.includes(m)) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) continue;
       }
       
       // Time filtering

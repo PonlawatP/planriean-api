@@ -105,8 +105,9 @@ async function getSubjectDataFromPlanSubject(plan_id, year, semester, force_subj
         (c) => c.code == s.code && c.sec == s.sec
       );
       if (ref_subject != null) {
+        const { lecturer, ...refSansLecturer } = ref_subject;
         return {
-          ...ref_subject,
+          ...refSansLecturer,
           cr_id: undefined,
           mute_alert: s.mute_alert != null ? s.mute_alert : false,
         };

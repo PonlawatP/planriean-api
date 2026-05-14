@@ -267,6 +267,9 @@ paths:
   /university/{uni_id}/course/{year}/{semester}:
     post:
       summary: Get specific courses
+      description: >
+        Returns course sections for the term. For PDPA, subject objects do not include
+        instructor names, and any `master` (instructor) filter in the request body is ignored.
       parameters:
         - name: uni_id
           in: path
@@ -288,6 +291,31 @@ paths:
           description: Course list retrieved successfully
         '400':
           description: Invalid request
+
+  /university/{uni_id}/course/{year}/{semester}/lecturer:
+    get:
+      summary: List instructor names (deprecated)
+      description: Returns an empty list for PDPA; kept for backward compatibility.
+      tags: [University]
+      parameters:
+        - name: uni_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: semester
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Empty instructor list
 
   # Authentication Routes
   /auth/register:
