@@ -352,7 +352,12 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
       paramIdx += 2;
     }
 
-    const sql = `SELECT course_detail.code, course_detail.sec, course_seat.seat_remain, course_seat.seat_available FROM course_detail LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id WHERE uni_id = $1 AND year = $2 AND semester = $3 AND (course_detail.code, course_detail.sec) IN (VALUES ${tuples.join(',')})`;
+    // Cast columns to text to avoid integer=text operator errors when parameter types vary
+    const sql = `SELECT course_detail.code, course_detail.sec, course_seat.seat_remain, course_seat.seat_available
+      FROM course_detail
+      LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id
+      WHERE uni_id = $1 AND year = $2 AND semester = $3
+      AND (course_detail.code::text, course_detail.sec::text) IN (VALUES ${tuples.join(',')})`;
     const dbParams = [uni_id, year, semester, ...valuesParams];
     const res = await db.query(sql, dbParams);
 
