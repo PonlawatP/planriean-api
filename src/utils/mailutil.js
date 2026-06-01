@@ -1,9 +1,61 @@
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
+const { Resend } = require("resend");
+
+let resend = null;
+const getResendClient = () => {
+    if (resend) return resend;
+    if (!process.env.RESEND_API_KEY) {
+        throw new Error("Missing RESEND_API_KEY environment variable for Resend email delivery.");
+    }
+    resend = new Resend(process.env.RESEND_API_KEY);
+    return resend;
+};
+
+let transporter = null;
+
+const getResendFromAddress = () => {
+    const fromAddress = process.env.RESEND_FROM_EMAIL || process.env.USER_EMAIL;
+    if (!fromAddress) {
+        throw new Error("Missing RESEND_FROM_EMAIL or USER_EMAIL environment variable for email sender address.");
+    }
+    return fromAddress;
+};
+
+const sendResendEmail = async ({
+    to,
+    subject,
+    html,
+    text,
+    from,
+    replyTo,
+    cc,
+    bcc,
+    tags,
+    attachments,
+    idempotencyKey,
+}) => {
+    const fromAddress = from || getResendFromAddress();
+    const message = {
+        from: fromAddress,
+        to,
+        subject,
+        html,
+        text,
+        replyTo,
+        cc,
+        bcc,
+        tags,
+        attachments,
+        idempotencyKey,
+    };
+
+    const { data, error } = await getResendClient().emails.send(message);
+    return { data, error };
+};
 
 const OAuth2 = google.auth.OAuth2;
 
-let transporter = null;
 let oauth2Client = null;
 
 // Initialize OAuth2 client (singleton)
@@ -110,5 +162,6 @@ module.exports = {
     createTransporter,
     getAccessToken,
     verifyTransporter,
-    scheduleTokenRefresh
+    scheduleTokenRefresh,
+    sendResendEmail,
 }

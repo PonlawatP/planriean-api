@@ -9,7 +9,7 @@ const {
 } = require("../../utils/userutil");
 const { getFacIdFromFacNameTh } = require("../../utils/universityutil");
 const crypto = require('crypto');
-const { createTransporter } = require("../../utils/mailutil");
+const { sendResendEmail } = require("../../utils/mailutil");
 const bcrypt = require('bcryptjs');
 
 async function authToken(req, res) {
@@ -231,9 +231,10 @@ async function sendOTP(email) {
   );
 
 
-  // Send email with OTP
-  const mailOptions = {
-    from: `"Planriean-NoReply" <${process.env.USER_EMAIL}>`,
+  // Send email with OTP via Resend
+  const fromAddress = process.env.RESEND_FROM_EMAIL || process.env.USER_EMAIL;
+  const { data, error } = await sendResendEmail({
+    from: `"Planriean-NoReply" <${fromAddress}>`,
     to: email,
     subject: 'รหัส OTP สำหรับรีเซ็ตรหัสผ่าน',
     html: `
@@ -247,14 +248,11 @@ async function sendOTP(email) {
       </ul>
 
       <p>รหัส OTP นี้จะหมดอายุใน 3 นาที</p>
-    `
-  };
+    `,
+  });
 
-  try {
-    const transporter = await createTransporter();
-    await transporter.sendMail(mailOptions);
-  } catch (err) {
-    console.error("Error sending OTP email:", err);
+  if (error) {
+    console.error("Error sending OTP email:", error);
   }
 }
 
