@@ -94,6 +94,91 @@ async function elysiaGetCoursesSpecific(context, parameter = null, data = null) 
     const uni_id = parameter?.uni_id || context.params.uni_id || 1; // Get uni_id from params
     let searchData = data || context.body;
 
+    // If client POSTs only { subjects: [...] } then act as the seats endpoint
+    if (searchData && Array.isArray(searchData.subjects)) {
+      // Reuse the seats logic for per-section redis MGET + DB on miss
+      const subjects = searchData.subjects;
+      const seen = new Set();
+      const unique = [];
+      for (const s of subjects) {
+        const code = (s.code || '').toString();
+        const secValue = s.sec;
+        const sec = secValue === undefined || secValue === null ? '' : Number(secValue);
+        const secKey = Number.isNaN(sec) ? (secValue || '').toString() : sec.toString();
+        const k = `${code}::${secKey}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          unique.push({ code, sec: Number.isNaN(sec) ? secKey : sec });
+        }
+      }
+
+      const uni_key = await getUniKey(uni_id);
+      const keys = unique.map(s => `planriean-${uni_key}:seat:${year}-${semester}:${s.code}:${s.sec}`);
+      const cachedVals = keys.length ? await redis.mget(...keys) : [];
+
+      const cachedMap = new Map();
+      const misses = [];
+      for (let i = 0; i < unique.length; i++) {
+        const v = cachedVals[i];
+        if (v) {
+          try { cachedMap.set(`${unique[i].code}::${unique[i].sec}`, JSON.parse(v)); } catch (e) {}
+        } else {
+          misses.push(unique[i]);
+        }
+      }
+
+      const result_updated = await db.query(
+        `SELECT to_char(refresh_updated_at + interval '543 years', 'DD/MM/YY HH24:MI:SS') AS formatted_date FROM university_detail WHERE uni_id = $1`,
+        [uni_id]
+      );
+      const data_updated = result_updated.rows[0]?.formatted_date || null;
+
+      if (misses.length > 0) {
+        const valuesParams = [];
+        const tuples = [];
+        let paramIdx = 4;
+        for (const m of misses) {
+          tuples.push(`($${paramIdx}, $${paramIdx + 1})`);
+          valuesParams.push(m.code, Number(m.sec));
+          paramIdx += 2;
+        }
+
+        const sql = `SELECT course_detail.code, course_detail.sec, course_seat.seat_remain, course_seat.seat_available
+          FROM course_detail
+          LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id
+          WHERE uni_id = $1 AND year = $2 AND semester = $3
+          AND (course_detail.code::text, course_detail.sec::text) IN (VALUES ${tuples.join(',')})`;
+        const dbParams = [uni_id, year, semester, ...valuesParams];
+        const res = await db.query(sql, dbParams);
+
+        for (const r of res.rows) {
+          const key = `${r.code}::${r.sec}`;
+          cachedMap.set(key, { code: r.code, sec: r.sec, seat_remain: (r.seat_remain != null ? r.seat_remain : -1), seat_available: (r.seat_available != null ? r.seat_available : -1) });
+        }
+
+        try {
+          const pipeline = redis.pipeline();
+          for (const m of misses) {
+            const key = `planriean-${uni_key}:seat:${year}-${semester}:${m.code}:${m.sec}`;
+            const val = cachedMap.get(`${m.code}::${m.sec}`) || { code: m.code, sec: m.sec, seat_remain: -1, seat_available: -1 };
+            pipeline.set(key, JSON.stringify(val), 'EX', 60);
+          }
+          await pipeline.exec();
+        } catch (err) {
+          console.error('Redis pipeline failed:', err);
+        }
+      }
+
+      const seats = unique.map(s => {
+        const key = `${s.code}::${s.sec}`;
+        const item = cachedMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
+        // Normalize fields: DB columns: seat_remain = available, seat_available = total
+        return { code: item.code, sec: Number(item.sec) || item.sec, seat_available: (typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1), seat_total: (typeof item.seat_available !== 'undefined' ? item.seat_available : -1) };
+      });
+
+      return { cached: misses.length === 0, updated: data_updated, seats };
+    }
+
     if (searchData.type.length == 0) {
       searchData.type = ["004*"];
     }
@@ -335,8 +420,8 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
         return {
           code: s.code,
           sec: Number(s.sec) || s.sec,
-          seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
-          seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
+          seat_available: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
+          seat_total: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
         };
       });
       return { cached: true, updated: data_updated, seats };
@@ -388,11 +473,12 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
     const seats = unique.map(s => {
       const key = `${s.code}::${s.sec}`;
       const item = cachedMap.get(key) || dbMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
+      // Normalize: seat_available = available seats (from DB seat_remain), seat_total = total seats (from DB seat_available)
       return {
         code: item.code,
         sec: Number(item.sec) || item.sec,
-        seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
-        seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
+        seat_available: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
+        seat_total: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
       };
     });
 
