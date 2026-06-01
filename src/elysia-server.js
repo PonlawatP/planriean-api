@@ -7,6 +7,7 @@ const { Elysia } = require("elysia");
 const { cors } = require('@elysiajs/cors');
 const db = require("./db");
 const redis = require("./redis");
+const { scheduleTokenRefresh, verifyTransporter } = require("./utils/mailutil");
 
 // Import the course module
 const { getUserFromToken } = require("./utils/userutil");
@@ -592,3 +593,14 @@ const app = new Elysia()
 console.log(`🦊 ElysiaJS server running at http://${app.server?.hostname}:${app.server?.port}`);
 console.log(`High-concurrency endpoint available at: http://${app.server?.hostname}:${app.server?.port}/university/:uni_id/course/:year/:semester`); 
 console.log(`WebSocket endpoint available at: ws://${app.server?.hostname}:${app.server?.port}/ws/planriean`);
+
+// Initialize email transporter and set up automatic token refresh
+(async () => {
+  try {
+    await verifyTransporter();
+    scheduleTokenRefresh(); // Start automatic token refresh every 45 minutes
+    console.log("[Email] Automatic token refresh scheduler started");
+  } catch (err) {
+    console.error("[Email] Failed to initialize email transporter:", err);
+  }
+})();

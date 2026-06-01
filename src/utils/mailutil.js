@@ -1,40 +1,48 @@
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
-const fs = require("fs");
 
 const OAuth2 = google.auth.OAuth2;
 
+let transporter = null;
+let oauth2Client = null;
+
+// Initialize OAuth2 client (singleton)
+const initializeOAuth2Client = () => {
+    if (oauth2Client) return oauth2Client;
+    
+    oauth2Client = new OAuth2(
+        process.env.CLIENT_ID,
+        process.env.CLIENT_SECRET,
+        "https://developers.google.com/oauthplayground"
+    );
+
+    oauth2Client.setCredentials({
+        refresh_token: process.env.REFRESH_TOKEN,
+    });
+
+    return oauth2Client;
+};
+
+// Create transporter with automatic token refresh
 const createTransporter = async () => {
     try {
-        const oauth2Client = new OAuth2(
-            process.env.CLIENT_ID,
-            process.env.CLIENT_SECRET,
-            "https://developers.google.com/oauthplayground"
-        );
+        // If transporter already exists, return it (nodemailer handles token refresh internally)
+        if (transporter) {
+            return transporter;
+        }
 
-        oauth2Client.setCredentials({
-            refresh_token: process.env.REFRESH_TOKEN,
-        });
+        const client = initializeOAuth2Client();
 
-        const accessToken = await new Promise((resolve, reject) => {
-            oauth2Client.getAccessToken((err, token) => {
-                if (err) {
-                    console.log("*ERR: ", err)
-                    reject();
-                }
-                resolve(token);
-            });
-        });
-
-        const transporter = nodemailer.createTransport({
+        transporter = nodemailer.createTransport({
             service: "gmail",
             auth: {
                 type: "OAuth2",
                 user: process.env.REAL_EMAIL,
-                accessToken,
                 clientId: process.env.CLIENT_ID,
                 clientSecret: process.env.CLIENT_SECRET,
                 refreshToken: process.env.REFRESH_TOKEN,
+                // Optional: Add access token for immediate use
+                accessToken: await getAccessToken(),
             },
             dkim: {
                 domainName: process.env.DKIM_DOMAIN,
@@ -42,6 +50,7 @@ const createTransporter = async () => {
                 privateKey: process.env.DKIM_PRIVATE_KEY,
             },
         });
+
         return transporter;
     } catch (err) {
         console.error("Error creating transporter:", err);
@@ -49,6 +58,57 @@ const createTransporter = async () => {
     }
 };
 
+// Get fresh access token with automatic refresh
+const getAccessToken = async () => {
+    try {
+        const client = initializeOAuth2Client();
+        
+        return new Promise((resolve, reject) => {
+            client.getAccessToken((err, token) => {
+                if (err) {
+                    console.error("Error getting access token:", err);
+                    reject(err);
+                } else {
+                    resolve(token);
+                }
+            });
+        });
+    } catch (err) {
+        console.error("Error in getAccessToken:", err);
+        throw err;
+    }
+};
+
+// Verify connection (optional, for testing)
+const verifyTransporter = async () => {
+    try {
+        const trans = await createTransporter();
+        await trans.verify();
+        console.log("✓ Email transporter verified and ready");
+        return true;
+    } catch (err) {
+        console.error("✗ Email transporter verification failed:", err);
+        return false;
+    }
+};
+
+// Refresh token periodically (optional, but recommended for long-running servers)
+const scheduleTokenRefresh = () => {
+    // Refresh token every 45 minutes (before the 1-hour expiration)
+    setInterval(async () => {
+        try {
+            console.log("[Email] Refreshing OAuth2 token...");
+            await getAccessToken();
+            console.log("[Email] OAuth2 token refreshed successfully");
+        } catch (err) {
+            console.error("[Email] Token refresh failed:", err);
+        }
+    }, 45 * 60 * 1000); // 45 minutes
+};
+
 module.exports = {
-    createTransporter
+    createTransporter,
+    getAccessToken,
+    verifyTransporter,
+    scheduleTokenRefresh
 }
