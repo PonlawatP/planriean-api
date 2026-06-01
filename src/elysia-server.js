@@ -294,11 +294,13 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
     const unique = [];
     for (const s of subjects) {
       const code = (s.code || '').toString();
-      const sec = (s.sec || '').toString();
-      const k = `${code}::${sec}`;
+      const secValue = s.sec;
+      const sec = secValue === undefined || secValue === null ? '' : Number(secValue);
+      const secKey = Number.isNaN(sec) ? (secValue || '').toString() : sec.toString();
+      const k = `${code}::${secKey}`;
       if (!seen.has(k)) {
         seen.add(k);
-        unique.push({ code, sec });
+        unique.push({ code, sec: Number.isNaN(sec) ? secKey : sec });
       }
     }
 
@@ -346,7 +348,7 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
     let paramIdx = 4; // $1..$3 are used
     for (const m of misses) {
       tuples.push(`($${paramIdx}, $${paramIdx + 1})`);
-      valuesParams.push(m.code, m.sec);
+      valuesParams.push(m.code, Number(m.sec));
       paramIdx += 2;
     }
 
