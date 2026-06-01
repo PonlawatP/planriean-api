@@ -173,7 +173,7 @@ async function elysiaGetCoursesSpecific(context, parameter = null, data = null) 
         const key = `${s.code}::${s.sec}`;
         const item = cachedMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
         // Normalize fields: DB columns: seat_remain = available, seat_available = total
-        return { code: item.code, sec: Number(item.sec) || item.sec, seat_available: (typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1), seat_total: (typeof item.seat_available !== 'undefined' ? item.seat_available : -1) };
+        return { code: item.code, sec: Number(item.sec) || item.sec, seat_remain: (typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1), seat_available: (typeof item.seat_available !== 'undefined' ? item.seat_available : -1) };
       });
 
       return { cached: misses.length === 0, updated: data_updated, seats };
@@ -420,8 +420,8 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
         return {
           code: s.code,
           sec: Number(s.sec) || s.sec,
-          seat_available: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
-          seat_total: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
+          seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
+          seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
         };
       });
       return { cached: true, updated: data_updated, seats };
@@ -473,12 +473,11 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
     const seats = unique.map(s => {
       const key = `${s.code}::${s.sec}`;
       const item = cachedMap.get(key) || dbMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
-      // Normalize: seat_available = available seats (from DB seat_remain), seat_total = total seats (from DB seat_available)
       return {
         code: item.code,
         sec: Number(item.sec) || item.sec,
-        seat_available: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
-        seat_total: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
+        seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
+        seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
       };
     });
 
