@@ -277,6 +277,126 @@ async function getUniKey(uni_id) {
   return uni_key;
 }
 
+// Elysia handler: POST /university/:uni_id/course/:year/:semester/seats
+async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null) {
+  try {
+    const { year, semester } = parameter || context.params;
+    const uni_id = parameter?.uni_id || context.params.uni_id || 1;
+    const body = data || context.body || {};
+
+    const subjects = Array.isArray(body.subjects) ? body.subjects : [];
+    if (subjects.length === 0) {
+      return { seats: [] };
+    }
+
+    // Deduplicate by code+sec
+    const seen = new Set();
+    const unique = [];
+    for (const s of subjects) {
+      const code = (s.code || '').toString();
+      const sec = (s.sec || '').toString();
+      const k = `${code}::${sec}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        unique.push({ code, sec });
+      }
+    }
+
+    const uni_key = await getUniKey(uni_id);
+    const lastDataUpdatedKey = `planriean-${uni_key}:subjs:dataUpdated`;
+
+    // Build per-section redis keys
+    const keys = unique.map(s => `planriean-${uni_key}:seat:${year}-${semester}:${s.code}:${s.sec}`);
+    const cachedVals = await redis.mget(...keys);
+
+    const cachedMap = new Map();
+    const misses = [];
+    for (let i = 0; i < unique.length; i++) {
+      const v = cachedVals[i];
+      if (v) {
+        try { cachedMap.set(`${unique[i].code}::${unique[i].sec}`, JSON.parse(v)); } catch (e) {}
+      } else {
+        misses.push(unique[i]);
+      }
+    }
+
+    // Get formatted updated timestamp
+    const result_updated = await db.query(
+      `SELECT to_char(refresh_updated_at + interval '543 years', 'DD/MM/YY HH24:MI:SS') AS formatted_date FROM university_detail WHERE uni_id = $1`,
+      [uni_id]
+    );
+    const data_updated = result_updated.rows[0]?.formatted_date || null;
+
+    if (misses.length === 0) {
+      const seats = unique.map(s => {
+        const item = cachedMap.get(`${s.code}::${s.sec}`) || {};
+        return {
+          code: s.code,
+          sec: Number(s.sec) || s.sec,
+          seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
+          seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
+        };
+      });
+      return { cached: true, updated: data_updated, seats };
+    }
+
+    // Query DB for misses using VALUES list for tuple IN
+    const valuesParams = [];
+    const tuples = [];
+    let paramIdx = 4; // $1..$3 are used
+    for (const m of misses) {
+      tuples.push(`($${paramIdx}, $${paramIdx + 1})`);
+      valuesParams.push(m.code, m.sec);
+      paramIdx += 2;
+    }
+
+    const sql = `SELECT course_detail.code, course_detail.sec, course_seat.seat_remain, course_seat.seat_available FROM course_detail LEFT JOIN course_seat ON course_detail.cr_id = course_seat.cr_id WHERE uni_id = $1 AND year = $2 AND semester = $3 AND (course_detail.code, course_detail.sec) IN (VALUES ${tuples.join(',')})`;
+    const dbParams = [uni_id, year, semester, ...valuesParams];
+    const res = await db.query(sql, dbParams);
+
+    const dbMap = new Map();
+    for (const r of res.rows) {
+      const key = `${r.code}::${r.sec}`;
+      dbMap.set(key, {
+        code: r.code,
+        sec: r.sec,
+        seat_remain: typeof r.seat_remain !== 'undefined' && r.seat_remain !== null ? r.seat_remain : -1,
+        seat_available: typeof r.seat_available !== 'undefined' && r.seat_available !== null ? r.seat_available : -1
+      });
+    }
+
+    // Cache misses
+    try {
+      const pipeline = redis.pipeline();
+      for (const m of misses) {
+        const key = `planriean-${uni_key}:seat:${year}-${semester}:${m.code}:${m.sec}`;
+        const val = dbMap.get(`${m.code}::${m.sec}`) || { code: m.code, sec: m.sec, seat_remain: -1, seat_available: -1 };
+        pipeline.set(key, JSON.stringify(val), 'EX', 60);
+      }
+      await pipeline.exec();
+    } catch (err) {
+      console.error('Redis pipeline failed:', err);
+    }
+
+    const seats = unique.map(s => {
+      const key = `${s.code}::${s.sec}`;
+      const item = cachedMap.get(key) || dbMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
+      return {
+        code: item.code,
+        sec: Number(item.sec) || item.sec,
+        seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
+        seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
+      };
+    });
+
+    return { cached: false, updated: data_updated, seats };
+  } catch (err) {
+    console.error(err);
+    context.set.status = 500;
+    return "Internal Server Error";
+  }
+}
+
 // Create Elysia app with CORS support
 const app = new Elysia()
   // Add CORS plugin with appropriate configuration
@@ -291,6 +411,7 @@ const app = new Elysia()
     maxAge: 86400  // 24 hours
   }))
   .post('/university/:uni_id/course/:year/:semester', elysiaGetCoursesSpecific)
+  .post('/university/:uni_id/course/:year/:semester/seats', elysiaGetPlanSubjectSeats)
   .ws('/ws/planriean', {
     // validate incoming message
     body: t.Object({
