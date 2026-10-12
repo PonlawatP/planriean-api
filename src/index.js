@@ -7,6 +7,7 @@ const fs = require("fs");
 var pjson = require("../package.json");
 const redis = require("redis");
 
+const devlog = require("./utils/devlog");
 const port = process.env.PORT || 3030;
 const { home } = require("./routes");
 var cors = require("cors");
@@ -115,6 +116,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+if (devlog.enabled) app.use(devlog.expressLogger);
 
 app.use(express.json());
 app.use(bodyParser.json({ limit: "6mb" }));
@@ -396,6 +398,8 @@ async function checkRedisConnection() {
     return false;
   }
 }
+
+if (devlog.enabled) app.use(devlog.errorTap);
 
 app.listen(port, "0.0.0.0", async () => {
   console.log("Planriean Subjects Service");

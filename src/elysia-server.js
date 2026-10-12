@@ -491,7 +491,9 @@ async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null)
 }
 
 // Create Elysia app with CORS support
+const devlog = require("./utils/devlog");
 const app = new Elysia()
+  .use((a) => (devlog.enabled ? devlog.elysiaLogger(a) : a))
   // Add CORS plugin with appropriate configuration
   .use(cors({
     origin: [
