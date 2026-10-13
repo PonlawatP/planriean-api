@@ -1,6 +1,6 @@
 const jwt = require("jwt-simple");
 const db = require("../../db");
-const { getUserFromRequest } = require("../../utils/userutil");
+const { getUserFromRequest, getUserRowFromRequest } = require("../../utils/userutil");
 const { createDbDate } = require("../../utils/dateutil");
 const { getUniversityDetailWithNameFunc } = require("../university");
 const { getCoursesetSubjectRestricted } = require("../course-set");
@@ -428,71 +428,73 @@ async function getPlanSubjectsUser(req, res) {
       .json({ success: false, error: error.code, msg: error.detail });
   }
 }
+// Hot path during registration: identity is one query, owner check + update_at + row lock are one UPDATE inside the
+// save transaction, and the HTTP reply is just { success } (the frontend never reads the saved rows back).
 async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = null) {
+  let client = null;
   try {
     // checks ws_session is next function on express parameter. if it is. force it to null
     if(ws_session instanceof Function){
       ws_session = null;
     }
-    
-    const user = ws_session != null ? ws_session.user : await getUserFromRequest(req);
+    const fail = (error, msg) => {
+      const err = { success: false, error, msg };
+      if (ws_session != null) return err;
+      return res.status(error).json(err);
+    };
+
+    const user = ws_session != null ? ws_session.user : await getUserRowFromRequest(req);
     const { plan_id } = ws_session != null ? ws_session : req.params;
     const { subjects } = ws_body != null ? ws_body : req.body;
-    const result = await db.query(
-      "SELECT * FROM plan_detail WHERE plan_id = $1",
-      [plan_id]
+
+    client = await db.connect();
+    await client.query("BEGIN");
+    // ไม่ให้ user id อื่นอัพเดตข้อมูลได้ — only the owner's row matches; also stamps เวลาแก้ไขตาราง and locks the plan row
+    const owned = await client.query(
+      `UPDATE "plan_detail" SET "update_at" = to_timestamp($1) WHERE "plan_id" = $2 AND "user_uid" = $3 RETURNING uni_id, cr_year, cr_seamseter`,
+      [Date.now() / 1000.0, plan_id, user?.uid]
     );
-    if (result.rows.length > 0) {
-      const plan_detail = result.rows[0];
-      // ไม่ให้ user id อื่นอัพเดตข้อมูลได้
-      if (plan_detail.user_uid != user.uid) {
-        if (ws_session != null) {
-          return { success: false, error: 403, msg: "Plan Forbidden" }
-        }
+    if (owned.rows.length === 0) {
+      await client.query("ROLLBACK");
+      const exists = await client.query("SELECT 1 FROM plan_detail WHERE plan_id = $1", [plan_id]);
+      return exists.rows.length > 0 ? fail(403, "Plan Forbidden") : fail(404, "Plan Not Found");
+    }
+    const plan_detail = owned.rows[0];
 
-        return res
-          .status(403)
-          .json({ success: false, error: 403, msg: "Plan Forbidden" });
-      }
+    // H7: validate BEFORE touching data
+    if (!Array.isArray(subjects)) {
+      await client.query("ROLLBACK");
+      return fail(400, "subjects must be an array");
+    }
 
-      // H7: validate BEFORE touching data
-      if (!Array.isArray(subjects)) {
-        const err = { success: false, error: 400, msg: "subjects must be an array" };
-        if (ws_session != null) return err;
-        return res.status(400).json(err);
-      }
+    // M20: items carrying custom_id are user-made subjects -> plan_subject_custom; the rest are real course rows
+    const customItems = subjects.filter((x) => x && x.custom_id != null);
+    const baseItems = subjects.filter((x) => !(x && x.custom_id != null));
+    const customRows = [];
+    let bad = customItems.length > MAX_CUSTOMS ? "too many custom subjects" : null;
+    for (const c of customItems) {
+      if (bad) break;
+      const r = sanitizeCustomSubject(c);
+      if (!r.ok) bad = r.msg;
+      else if (customRows.some((x) => x.custom_key === r.row.custom_key)) bad = "duplicate custom_id";
+      else customRows.push(r.row);
+    }
+    if (bad) {
+      await client.query("ROLLBACK");
+      return fail(400, bad);
+    }
 
-      // M20: items carrying custom_id are user-made subjects -> plan_subject_custom; the rest are real course rows
-      const customItems = subjects.filter((x) => x && x.custom_id != null);
-      const baseItems = subjects.filter((x) => !(x && x.custom_id != null));
-      const customRows = [];
-      let bad = customItems.length > MAX_CUSTOMS ? "too many custom subjects" : null;
-      for (const c of customItems) {
-        if (bad) break;
-        const r = sanitizeCustomSubject(c);
-        if (!r.ok) bad = r.msg;
-        else if (customRows.some((x) => x.custom_key === r.row.custom_key)) bad = "duplicate custom_id";
-        else customRows.push(r.row);
-      }
-      if (bad) {
-        const err = { success: false, error: 400, msg: bad };
-        if (ws_session != null) return err;
-        return res.status(400).json(err);
-      }
-
-      let values = [];
-      let insertQuery = null;
-      if (baseItems.length > 0) {
-        // one row per (code, sec) — matches UNIQUE(plan_id, code, sec); last one wins
-        const uniq = [...new Map(baseItems.map((x) => [`${x.code}|${x.sec}`, x])).values()];
-        const sql_placeholders = uniq
-          .map((_, i) => `(${[1, 2, 3, 4, 5, 6, 7].map((j) => `$${i * 7 + j}`).join(",")})`)
-          .join(",");
-        insertQuery = `
-                INSERT INTO "plan_subject" (plan_id, year, seamster, code, sec, mute_alert, uni_id) 
-                VALUES ${sql_placeholders}
-            ;`;
-        values = uniq.flatMap((subject) => [
+    // reset + insert in ONE transaction so a failed INSERT can't leave the plan empty
+    await client.query(`DELETE FROM plan_subject WHERE plan_id = $1;`, [plan_id]);
+    if (baseItems.length > 0) {
+      // one row per (code, sec) — matches UNIQUE(plan_id, code, sec); last one wins
+      const uniq = [...new Map(baseItems.map((x) => [`${x.code}|${x.sec}`, x])).values()];
+      const sql_placeholders = uniq
+        .map((_, i) => `(${[1, 2, 3, 4, 5, 6, 7].map((j) => `$${i * 7 + j}`).join(",")})`)
+        .join(",");
+      await client.query(
+        `INSERT INTO "plan_subject" (plan_id, year, seamster, code, sec, mute_alert, uni_id) VALUES ${sql_placeholders};`,
+        uniq.flatMap((subject) => [
           plan_id,
           subject.year,
           subject.semester,
@@ -500,60 +502,33 @@ async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = nul
           subject.sec,
           subject.mute_alert,
           plan_detail.uni_id,
-        ]);
-        // console.log(values);
-      }
-      // reset + insert in ONE transaction so a failed INSERT can't leave the plan empty
-      const client = await db.connect();
-      try {
-        await client.query("BEGIN");
-        await client.query(`DELETE FROM plan_subject WHERE plan_id = $1;`, [plan_id]);
-        if (insertQuery) await client.query(insertQuery, values);
-        await client.query(`DELETE FROM plan_subject_custom WHERE plan_id = $1;`, [plan_id]);
-        if (customRows.length > 0) {
-          const ph = customRows.map((_, i) => `($1,${[2, 3, 4, 5].map((j) => `$${i * 4 + j}`).join(",")})`).join(",");
-          await client.query(
-            `INSERT INTO plan_subject_custom (plan_id, custom_key, source_code, source_sec, data) VALUES ${ph};`,
-            [plan_id, ...customRows.flatMap((r) => [r.custom_key, r.source_code, r.source_sec, JSON.stringify(r.data)])]
-          );
-        }
-        await client.query("COMMIT");
-      } catch (e) {
-        await client.query("ROLLBACK").catch(() => {});
-        throw e;
-      } finally {
-        client.release();
-      }
-
-      // update เวลาแก้ไขตาราง
-      await db.query(
-        `UPDATE "plan_detail" SET "update_at" = to_timestamp($1) WHERE "plan_id" = $2 RETURNING *`,
-        [Date.now() / 1000.0, plan_id]
+        ])
       );
-      // return ข้อมูล
-      const subjects_res = await getSubjectDataFromPlanSubject(
-        plan_id,
-        plan_detail.cr_year,
-        plan_detail.cr_seamseter
-      ); // re-read saved rows from DB (BUG-PLAN-5: flat values[] was never the expected shape)
-      if (ws_session != null) {
-        return { success: true, result: subjects_res };
-      }
-      res.json({ success: true, result: subjects_res });
-    } else {
-      if (ws_session != null) {
-        return { success: false, error: 404, msg: "Plan Not Found" };
-      }
-      res
-        .status(404)
-        .json({ success: false, error: 404, msg: "Plan Not Found" });
     }
+    await client.query(`DELETE FROM plan_subject_custom WHERE plan_id = $1;`, [plan_id]);
+    if (customRows.length > 0) {
+      const ph = customRows.map((_, i) => `($1,${[2, 3, 4, 5].map((j) => `$${i * 4 + j}`).join(",")})`).join(",");
+      await client.query(
+        `INSERT INTO plan_subject_custom (plan_id, custom_key, source_code, source_sec, data) VALUES ${ph};`,
+        [plan_id, ...customRows.flatMap((r) => [r.custom_key, r.source_code, r.source_sec, JSON.stringify(r.data)])]
+      );
+    }
+    await client.query("COMMIT");
+
+    if (ws_session != null) {
+      // WS draft still returns the saved rows (BUG-PLAN-5 shape); revisit when the WS path is finished (phase B)
+      return { success: true, result: await getSubjectDataFromPlanSubject(plan_id, plan_detail.cr_year, plan_detail.cr_seamseter) };
+    }
+    res.json({ success: true });
   } catch (err) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
     console.log(err);
     if (ws_session != null) {
       return { success: false, error: err.code, msg: err.detail };
     }
     res.status(400).json({ success: false, error: err.code, msg: err.detail });
+  } finally {
+    if (client) client.release();
   }
 }
 async function deletePlanUser(req, res) {

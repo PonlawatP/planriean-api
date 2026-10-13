@@ -38,6 +38,9 @@ const rq = (uid, params = {}, body = {}) => ({ headers: { authorization: jwt.enc
 const sqlCalls = (re) => __db.calls.filter((c) => re.test(c[0]));
 const COURSE = { code: '0041001', sec: 1, year: 2569, semester: 1, name_en: 'Eng', lecturer: 'Dr. X', cr_id: 99, credit: '3(3-0-6)', time: 'Mo13:00-16:00 A' };
 const planRules = (plan = PLAN, subjects = [{ code: '0041001', sec: 1, mute_alert: true }]) => [
+  // save: owner check = UPDATE ... WHERE plan_id AND user_uid RETURNING (matches only the owner's row)
+  [/UPDATE "plan_detail" SET "update_at"[\s\S]*"user_uid" = \$3/, (sql, p) => (plan && p[2] == plan.user_uid ? [plan] : [])],
+  [/SELECT 1 FROM plan_detail WHERE plan_id/, plan ? [{ '?column?': 1 }] : []],
   [/SELECT \* FROM plan_detail WHERE plan_id/, plan ? [plan] : []],
   [/SELECT user_uid FROM plan_detail/, plan && !plan.is_delete ? [{ user_uid: plan.user_uid }] : []],
   [/SELECT \* FROM plan_subject/, subjects],
@@ -202,18 +205,29 @@ test('save subjects: non-owner -> 403 and plan_subject untouched', async () => {
   useDb(planRules());
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(8, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), res);
   expect(res.code).toBe(403);
+  expect(res.body).toEqual({ success: false, error: 403, msg: 'Plan Forbidden' });
   expect(sqlCalls(/DELETE FROM plan_subject/)).toHaveLength(0);
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all).toContain('ROLLBACK'); expect(all).not.toContain('COMMIT'); // update_at stamp is not kept either
 });
-test('save subjects = replace-all inside a transaction: BEGIN, DELETE, one multi-row INSERT of 7 params per subject, COMMIT, then touch update_at', async () => {
+test('save on a missing plan -> 404 "Plan Not Found", nothing committed', async () => {
+  useDb(planRules(null));
+  const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), res);
+  expect(res.code).toBe(404);
+  expect(res.body).toEqual({ success: false, error: 404, msg: 'Plan Not Found' });
+  expect(__db.calls.map((c) => c[0].trim())).not.toContain('COMMIT');
+});
+test('save subjects = replace-all inside ONE transaction: BEGIN, owner-checked update_at stamp, DELETE, one multi-row INSERT of 7 params per subject, COMMIT', async () => {
   useDb(planRules());
   await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), mkRes());
   const order = __db.calls.map((c) => c[0]).filter((s) => /plan_subject|update_at/.test(s) && !/SELECT|plan_subject_custom/.test(s));
   const all = __db.calls.map((c) => c[0].trim());
-  expect(all.indexOf('BEGIN')).toBeLessThan(all.findIndex((x) => x.includes('DELETE FROM plan_subject')));
+  expect(all.indexOf('BEGIN')).toBeLessThan(all.findIndex((x) => x.includes('"update_at"')));
   expect(all.indexOf('COMMIT')).toBeGreaterThan(all.findIndex((x) => x.includes('INSERT INTO "plan_subject"')));
-  expect(order[0]).toContain('DELETE FROM plan_subject');
-  expect(order[1]).toContain('INSERT INTO "plan_subject"');
-  expect(order[2]).toContain('"update_at"');
+  expect(order[0]).toContain('"update_at"');
+  expect(sqlCalls(/"update_at"/)[0][1].slice(1)).toEqual([10, 7]); // plan_id + caller uid: only the owner's row matches
+  expect(order[1]).toContain('DELETE FROM plan_subject');
+  expect(order[2]).toContain('INSERT INTO "plan_subject"');
   const [ins, vals] = sqlCalls(/INSERT INTO "plan_subject"/)[0];
   expect(ins).toContain('($1,$2,$3,$4,$5,$6,$7),($8,$9,$10,$11,$12,$13,$14)');
   expect(vals).toEqual([10, 2569, 1, '0041001', 1, false, 1, 10, 2569, 1, '1204101', 2, true, 1]);
@@ -221,20 +235,28 @@ test('save subjects = replace-all inside a transaction: BEGIN, DELETE, one multi
 test('save with an empty list clears the plan (DELETE only, no INSERT)', async () => {
   useDb(planRules(PLAN, []));
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: [] }), res);
-  expect(res.body).toEqual({ success: true, result: [] });
+  expect(res.body).toEqual({ success: true });
   expect(sqlCalls(/INSERT INTO "plan_subject"/)).toHaveLength(0);
 });
-test('BUG-PLAN-5: response.result echoes the saved subjects', async () => {
+test('HTTP save replies only {success:true} and never re-reads the plan (frontend only checks success)', async () => {
   useDb(planRules(PLAN, [{ code: '0041001', sec: 1 }]));
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: [FRONT_SUBJECTS[0]] }), res);
-  expect(res.body.success).toBe(true);
-  expect(res.body.result).toHaveLength(1);
+  expect(res.body).toEqual({ success: true });
+  expect(sqlCalls(/SELECT/)).toHaveLength(1); // only the user lookup
+});
+test('BUG-PLAN-5: WS save still returns result = the saved subjects', async () => {
+  useDb(planRules(PLAN, [{ code: '0041001', sec: 1 }]));
+  const out = await P.updatePlanSubjectsUser(null, null, { user: USERS[7], plan_id: 10 }, { subjects: [FRONT_SUBJECTS[0]] });
+  expect(out.success).toBe(true);
+  expect(out.result).toHaveLength(1);
 });
 test('BUG-PLAN-4: invalid body 400s WITHOUT deleting existing plan subjects', async () => {
   useDb(planRules());
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, {}), res);
   expect(res.code).toBe(400);
   expect(sqlCalls(/DELETE FROM plan_subject/)).toHaveLength(0);
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all).toContain('ROLLBACK'); expect(all).not.toContain('COMMIT');
 });
 test('BUG-PLAN-4: a failing INSERT is rolled back (DELETE never committed)', async () => {
   useDb(planRules());

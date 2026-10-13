@@ -114,6 +114,7 @@ const corsOptions = {
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
   optionsSuccessStatus: 204,
+  maxAge: 86400, // let browsers cache the preflight instead of sending OPTIONS before every plan save
 };
 
 app.use(cors(corsOptions));

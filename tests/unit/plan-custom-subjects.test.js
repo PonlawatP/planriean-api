@@ -37,6 +37,9 @@ const rq = (uid, params = {}, body = {}) => ({ headers: { authorization: jwt.enc
 const sqlCalls = (re) => __db.calls.filter((c) => re.test(c[0]));
 const COURSE = { code: '0041001', sec: 1, year: 2569, semester: 1, name_en: 'Eng', lecturer: 'Dr. X', cr_id: 99, credit: '3(3-0-6)', time: 'Mo13:00-16:00 A' };
 const planRules = (plan = PLAN, subjects = [{ code: '0041001', sec: 1, mute_alert: true }]) => [
+  // save: owner check = UPDATE ... WHERE plan_id AND user_uid RETURNING (matches only the owner's row)
+  [/UPDATE "plan_detail" SET "update_at"[\s\S]*"user_uid" = \$3/, (sql, p) => (plan && p[2] == plan.user_uid ? [plan] : [])],
+  [/SELECT 1 FROM plan_detail WHERE plan_id/, plan ? [{ '?column?': 1 }] : []],
   [/SELECT \* FROM plan_detail WHERE plan_id/, plan ? [plan] : []],
   [/SELECT user_uid FROM plan_detail/, plan && !plan.is_delete ? [{ user_uid: plan.user_uid }] : []],
   [/SELECT \* FROM plan_subject/, subjects],
@@ -81,7 +84,9 @@ test.each([
   const res = await put(7, [custom(o)]);
   expect(res.code).toBe(400);
   expect(sqlCalls(/DELETE FROM plan_subject/)).toHaveLength(0);
-  expect(__db.calls.map((c) => c[0].trim())).not.toContain('BEGIN');
+  // the owner check opens the transaction, so a rejected body must roll it back without committing anything
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all).toContain('ROLLBACK'); expect(all).not.toContain('COMMIT');
 });
 test('negative: >100 customs and duplicate custom_id are rejected', async () => {
   useDb(planRules());

@@ -75,30 +75,37 @@ async function getUserFromToken(token, show_passwd = false) {
     return null;
   }
 }
+// Just the user_detail row behind the request's JWT (1 query) — for hot paths that only need identity, not roles/plan count.
+async function getUserRowFromRequest(req) {
+  const jwt_dc = jwt.decode(
+    req.headers["authorization"],
+    process.env.SECRET_JWT
+  );
+
+  let result;
+
+  if (jwt_dc?.login_with == "auth-msu") {
+    result = await db.query(
+      "SELECT * FROM user_detail WHERE auth_reg_username = $1",
+      [jwt_dc.auth_reg_username]
+    );
+  } else {
+    result = await db.query(
+      `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : jwt_dc.sub != null ? 'username' : 'email'} = ${jwt_dc.uid != null ? '$1' : jwt_dc.sub != null ? '$1' : 'LOWER($1)'}`,
+      [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.sub != null ? jwt_dc.sub : jwt_dc.email]
+    );
+  }
+
+  return result.rows[0] || null;
+}
+
 async function getUserFromRequest(req, show_passwd = false) {
   try {
-    const jwt_dc = jwt.decode(
-      req.headers["authorization"],
-      process.env.SECRET_JWT
-    );
-
-    let result;
-
-    if (jwt_dc?.login_with == "auth-msu") {
-      result = await db.query(
-        "SELECT * FROM user_detail WHERE auth_reg_username = $1",
-        [jwt_dc.auth_reg_username]
-      );
-    } else {
-      result = await db.query(
-        `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : jwt_dc.sub != null ? 'username' : 'email'} = ${jwt_dc.uid != null ? '$1' : jwt_dc.sub != null ? '$1' : 'LOWER($1)'}`,
-        [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.sub != null ? jwt_dc.sub : jwt_dc.email]
-      );
-    }
-
-    if (result.rows.length == 0) {
+    const user = await getUserRowFromRequest(req);
+    if (user == null) {
       return null;
     }
+    const result = { rows: [user] };
 
     const roles = await getUserRoles(result.rows[0]);
 
@@ -580,6 +587,7 @@ module.exports = {
   getUsers,
   getUser,
   getUserFromRequest,
+  getUserRowFromRequest,
   getUserFromToken,
   getUserFromUID,
   getUserRoles,
