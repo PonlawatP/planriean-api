@@ -134,45 +134,34 @@ async function updateUser(req, res) {
     );
     const { uni_id, fac_id, cr_id, std_id, std_name, std_surname, std_start_year, email, username, image } = req.body;
 
-    // Sanitize inputs
-    const sanitizedUniId = sanitizeInput(uni_id);
-    const sanitizedFacId = sanitizeInput(fac_id);
-    const sanitizedCrId = sanitizeInput(cr_id);
-    const sanitizedStdId = std_id != null && std_id.length == 11 ? sanitizeInput(std_id) : "";
-    const sanitizedStdName = sanitizeInput(std_name);
-    const sanitizedStdSurname = sanitizeInput(std_surname);
-    const sanitizedStdStartYear = sanitizeInput(std_start_year);
-    const sanitizedEmail = sanitizeInput(email);
-    const sanitizedUsername = sanitizeInput(username);
-    const sanitizedImage = sanitizeInput(image);
-
-    await db.query(
-      `UPDATE "public"."user_detail" SET 
-        "uni_id" = $1, 
-        "fac_id" = $2, 
-        "cr_id" = $3, 
-        "std_id" = $4, 
-        "std_name" = $5, 
-        "std_surname" = $6, 
-        "std_start_year" = $7, 
-        "email" = $8, 
-        "username" = $9,
-        "image" = $10
-      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.uid ? "uid" : "email"} = $11;`,
-      [
-        sanitizedUniId,
-        sanitizedFacId,
-        sanitizedCrId,
-        sanitizedStdId,
-        sanitizedStdName,
-        sanitizedStdSurname,
-        sanitizedStdStartYear,
-        sanitizedEmail,
-        sanitizedUsername,
-        sanitizedImage,
-        jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.uid ? jwt_dc.uid : jwt_dc.email,
-      ]
-    );
+    // H5: only columns present in the body are written (undefined = keep)
+    const incoming = {
+      uni_id: sanitizeInput(uni_id),
+      fac_id: sanitizeInput(fac_id),
+      cr_id: sanitizeInput(cr_id),
+      std_id: std_id != null && std_id.length == 11 ? sanitizeInput(std_id) : "",
+      std_name: sanitizeInput(std_name),
+      std_surname: sanitizeInput(std_surname),
+      std_start_year: sanitizeInput(std_start_year),
+      email: sanitizeInput(email),
+      username: sanitizeInput(username),
+      image: sanitizeInput(image),
+    };
+    const sets = [];
+    const params = [];
+    for (const [col, val] of Object.entries(incoming)) {
+      if (req.body[col] === undefined) continue;
+      params.push(val);
+      sets.push(`"${col}" = $${params.length}`);
+    }
+    if (sets.length > 0) {
+      params.push(jwt_dc.login_with == "auth-msu" ? jwt_dc.auth_reg_username : jwt_dc.uid ? jwt_dc.uid : jwt_dc.email);
+      await db.query(
+        `UPDATE "public"."user_detail" SET ${sets.join(", ")}
+      WHERE ${jwt_dc.login_with == "auth-msu" ? "auth_reg_username" : jwt_dc.uid ? "uid" : "email"} = $${params.length};`,
+        params
+      );
+    }
 
     const result = jwt_dc.login_with == "auth-msu" ? await getUserFromAuthMSU(jwt_dc.auth_reg_username) : (await getUserFromUID(jwt_dc.uid) || await getUserFromGoogle(jwt_dc.email))
 

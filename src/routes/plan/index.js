@@ -4,6 +4,7 @@ const { getUserFromRequest } = require("../../utils/userutil");
 const { createDbDate } = require("../../utils/dateutil");
 const { getUniversityDetailWithNameFunc } = require("../university");
 const { getCoursesetSubjectRestricted } = require("../course-set");
+const { sanitizeCustomSubject, MAX_CUSTOMS } = require("../../utils/customSubject");
 
 async function isPlanOwner(req) {
   try {
@@ -14,7 +15,7 @@ async function isPlanOwner(req) {
       "SELECT * FROM plan_detail WHERE plan_id = $1 AND is_delete = false",
       [plan_id]
     );
-    if (result.rows.length > 0 || result.rows[0].plan_uid == user.uid) {
+    if (result.rows.length > 0 && user != null && result.rows[0].user_uid == user.uid) {
       return true;
     }
   } catch (error) { }
@@ -116,6 +117,25 @@ async function getSubjectDataFromPlanSubject(plan_id, year, semester, force_subj
       }
     })
     .filter((s) => s !== null);
+  // M20: user-made subjects are standalone rows (own identity), never merged over a course_detail row
+  if (force_subjects_data == null) {
+    const customs = await db.query(
+      `SELECT custom_key, source_code, source_sec, data FROM plan_subject_custom WHERE plan_id = $1 ORDER BY id;`,
+      [plan_id]
+    );
+    for (const c of customs.rows || []) {
+      subjects_res.push({
+        uni_id: undefined,
+        note: '', lecturer: undefined, exam_mid: '', exam_final: '', name_en: '', name_th: '', credit: '',
+        ...c.data,
+        custom_id: c.custom_key,
+        source_code: c.source_code,
+        source_sec: c.source_sec,
+        is_custom: true,
+        mute_alert: c.data.mute_alert === true,
+      });
+    }
+  }
   return subjects_res;
 }
 
@@ -270,27 +290,22 @@ async function updatePlanUser(req, res) {
       status,
       plan_settings,
     } = req.body;
+    // H5: only columns present in the body are written (undefined = keep; explicit null = clear)
+    const cols = {
+      plan_name, cr_year, cr_seamseter, plan_color, plan_img, plan_dark, is_folder,
+      "ref_folder-plan_id": ref_folder_plan_id, status, cr_id, std_year, plan_settings,
+    };
+    const sets = [`"uni_id" = COALESCE($1, "uni_id")`, `"fac_id" = COALESCE($2, "fac_id")`, `"major_id" = COALESCE($3, "major_id")`, `"update_at" = to_timestamp($4)`];
+    const params = [user.uni_id, user.fac_id, user.major_id, Date.now() / 1000.0];
+    for (const [col, val] of Object.entries(cols)) {
+      if (val === undefined) continue;
+      params.push(val);
+      sets.push(`"${col}" = $${params.length}`);
+    }
+    params.push(plan_id);
     const result = await db.query(
-      `UPDATE "plan_detail" SET "plan_name" = $1, "cr_year" = $2, "cr_seamseter" = $3, "uni_id" = $4, "fac_id" = $5, "major_id" = $6, "plan_color" = $7, "plan_img" = $8, "plan_dark" = $9, "is_folder" = $10, "ref_folder-plan_id" = $11, "status" = $12, "update_at" = to_timestamp($13), "cr_id" = $14, "std_year" = $15, "plan_settings" = $16 WHERE "plan_id" = $17 RETURNING *;`,
-      [
-        plan_name,
-        cr_year,
-        cr_seamseter,
-        user.uni_id,
-        user.fac_id,
-        user.major_id,
-        plan_color,
-        plan_img,
-        plan_dark,
-        is_folder,
-        ref_folder_plan_id,
-        status,
-        Date.now() / 1000.0,
-        cr_id,
-        std_year,
-        plan_settings,
-        plan_id,
-      ]
+      `UPDATE "plan_detail" SET ${sets.join(", ")} WHERE "plan_id" = $${params.length} RETURNING *;`,
+      params
     );
     res.json({ success: true, result: result.rows[0] });
   } catch (error) {
@@ -389,8 +404,12 @@ async function getPlanSubjectsUser(req, res) {
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]
     );
-    if (result.rows.length > 0 || result.rows[0].plan_uid == user.uid) {
-      const plan_detail = result.rows[0];
+    const plan_detail = result.rows[0];
+    if (!plan_detail || plan_detail.is_delete) {
+      res
+        .status(404)
+        .json({ success: false, error: 404, msg: "Plan Not Found" });
+    } else if (user != null && (plan_detail.user_uid == user.uid || plan_detail.status == "public")) {
       const subjects_res = await getSubjectDataFromPlanSubject(
         plan_id,
         plan_detail.cr_year,
@@ -400,8 +419,8 @@ async function getPlanSubjectsUser(req, res) {
       res.json({ success: true, subjects: subjects_res });
     } else {
       res
-        .status(404)
-        .json({ success: false, error: 404, msg: "Plan Not Found" });
+        .status(403)
+        .json({ success: false, error: 403, msg: "Plan Not Allow To Aceess" });
     }
   } catch (error) {
     res
@@ -436,29 +455,44 @@ async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = nul
           .json({ success: false, error: 403, msg: "Plan Forbidden" });
       }
 
-      // reset ข้อมูลรายวิชาในแผนเรียนนั้นก่อนทำขั้นตอนต่อไป
-      await db.query(`DELETE FROM plan_subject WHERE plan_id = $1;`, [plan_id]);
+      // H7: validate BEFORE touching data
+      if (!Array.isArray(subjects)) {
+        const err = { success: false, error: 400, msg: "subjects must be an array" };
+        if (ws_session != null) return err;
+        return res.status(400).json(err);
+      }
+
+      // M20: items carrying custom_id are user-made subjects -> plan_subject_custom; the rest are real course rows
+      const customItems = subjects.filter((x) => x && x.custom_id != null);
+      const baseItems = subjects.filter((x) => !(x && x.custom_id != null));
+      const customRows = [];
+      let bad = customItems.length > MAX_CUSTOMS ? "too many custom subjects" : null;
+      for (const c of customItems) {
+        if (bad) break;
+        const r = sanitizeCustomSubject(c);
+        if (!r.ok) bad = r.msg;
+        else if (customRows.some((x) => x.custom_key === r.row.custom_key)) bad = "duplicate custom_id";
+        else customRows.push(r.row);
+      }
+      if (bad) {
+        const err = { success: false, error: 400, msg: bad };
+        if (ws_session != null) return err;
+        return res.status(400).json(err);
+      }
 
       let values = [];
-      if (subjects.length > 0) {
-        // เอาข้อมูลบางส่วนที่ไม่ได้ส่งมากับ body ยัดใส่ก่อนสร้าง sql placeholder
-        const sjs = subjects.map((s) => {
-          return { plan_id, ...s, uni_id: plan_detail.uni_id };
-        });
-        const sql_placeholders = sjs
-          .map(
-            (_, i) =>
-              `(${Object.keys(sjs[0])
-                .map((_, j) => `$${i * Object.keys(sjs[0]).length + j + 1}`)
-                .join(",")})`
-          )
+      let insertQuery = null;
+      if (baseItems.length > 0) {
+        // one row per (code, sec) — matches UNIQUE(plan_id, code, sec); last one wins
+        const uniq = [...new Map(baseItems.map((x) => [`${x.code}|${x.sec}`, x])).values()];
+        const sql_placeholders = uniq
+          .map((_, i) => `(${[1, 2, 3, 4, 5, 6, 7].map((j) => `$${i * 7 + j}`).join(",")})`)
           .join(",");
-        // console.log(sql_placeholders);
-        const insertQuery = `
+        insertQuery = `
                 INSERT INTO "plan_subject" (plan_id, year, seamster, code, sec, mute_alert, uni_id) 
                 VALUES ${sql_placeholders}
             ;`;
-        values = subjects.flatMap((subject) => [
+        values = uniq.flatMap((subject) => [
           plan_id,
           subject.year,
           subject.semester,
@@ -468,8 +502,27 @@ async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = nul
           plan_detail.uni_id,
         ]);
         // console.log(values);
-        // ยัดข้อมูลลง database
-        await db.query(insertQuery, values);
+      }
+      // reset + insert in ONE transaction so a failed INSERT can't leave the plan empty
+      const client = await db.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`DELETE FROM plan_subject WHERE plan_id = $1;`, [plan_id]);
+        if (insertQuery) await client.query(insertQuery, values);
+        await client.query(`DELETE FROM plan_subject_custom WHERE plan_id = $1;`, [plan_id]);
+        if (customRows.length > 0) {
+          const ph = customRows.map((_, i) => `($1,${[2, 3, 4, 5].map((j) => `$${i * 4 + j}`).join(",")})`).join(",");
+          await client.query(
+            `INSERT INTO plan_subject_custom (plan_id, custom_key, source_code, source_sec, data) VALUES ${ph};`,
+            [plan_id, ...customRows.flatMap((r) => [r.custom_key, r.source_code, r.source_sec, JSON.stringify(r.data)])]
+          );
+        }
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw e;
+      } finally {
+        client.release();
       }
 
       // update เวลาแก้ไขตาราง
@@ -481,9 +534,8 @@ async function updatePlanSubjectsUser(req, res, ws_session = null, ws_body = nul
       const subjects_res = await getSubjectDataFromPlanSubject(
         plan_id,
         plan_detail.cr_year,
-        plan_detail.cr_seamseter,
-        values
-      );
+        plan_detail.cr_seamseter
+      ); // re-read saved rows from DB (BUG-PLAN-5: flat values[] was never the expected shape)
       if (ws_session != null) {
         return { success: true, result: subjects_res };
       }

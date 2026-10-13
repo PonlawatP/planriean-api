@@ -22,7 +22,7 @@ async function getUser(username, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -67,7 +67,7 @@ async function getUserFromToken(token, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -111,7 +111,7 @@ async function getUserFromRequest(req, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -139,7 +139,7 @@ async function getUserFromUID(uid, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -174,6 +174,12 @@ async function getUserRoles(user) {
     for (let index = 0; index < result.rows.length; index++) {
       const sts = result.rows[index];
 
+      // the role's own university (not the user's home one) - authorization scoping depends on this
+      const role_uni_res = sts.uni_id != null ? await db.query(
+        "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
+        [sts.uni_id]
+      ) : null;
+
       const fac_res = await db.query(
         "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
         [sts.uni_id, sts.fac_id]
@@ -191,7 +197,7 @@ async function getUserRoles(user) {
 
       res.push({
         role: sts.role,
-        university: sts.uni_id != null ? { ...uni_res.rows[0] } : null,
+        university: sts.uni_id != null ? { ...role_uni_res.rows[0] } : null,
         faculty: sts.fac_id != null ? { ...fac_res.rows[0] } : null,
         major: sts.major_id != null ? { ...courseset_res.rows[0] } : null,
       });
@@ -352,7 +358,7 @@ async function getUsers(
 
     res.push({
       ...user,
-      password: undefined,
+      password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
       match_role: undefined,
       uni_id: undefined,
       fac_id: undefined,
@@ -388,7 +394,7 @@ async function getUserFromUsername(user) {
     [user, user]
   );
   if (result.rows.length > 0) {
-    let user_nopass = { ...result.rows[0], password: undefined };
+    let user_nopass = { ...result.rows[0], password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined };
 
     const uni_res = await db.query(
       "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
@@ -444,7 +450,7 @@ async function getUserFromGoogle(email) {
     email,
   ]);
   if (result.rows.length > 0) {
-    let user_nopass = { ...result.rows[0], password: undefined };
+    let user_nopass = { ...result.rows[0], password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined };
 
     const uni_res = await db.query(
       "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
@@ -501,7 +507,7 @@ async function getUserFromAuthMSU(student_id) {
   ]);
 
   if (result.rows.length > 0) {
-    let user_nopass = { ...result.rows[0], password: undefined };
+    let user_nopass = { ...result.rows[0], password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined };
 
     // Check if std_id matches student_id and update if necessary
     if (user_nopass.std_id !== student_id) {

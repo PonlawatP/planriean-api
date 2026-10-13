@@ -47,10 +47,7 @@ test('BUG-ROLE (current behavior): a plain "user" role can create a restricted g
   expect(res.code).toBe(201);
   expect(sqlCalls(/INSERT INTO courseset_restrictgrp/)[0][1]).toEqual([1, 5, undefined, 'กลุ่ม', 2569, 1]);
 });
-test.todo('BUG-ROLE: creating a restricted group must require an admin/moderator role (403 for plain users)', async () => {
-  const res = mkRes(); await R.a_addCourseRestrictGroup(rq(7, {}, { cr_id: 5 }), res);
-  expect(res.code).toBe(403);
-});
+// BUG-ROLE for restricted groups is now enforced in routing (requireRole / requireRestrictGroupRole in index.js); see plan-restrict-routes.test.js
 test('BUG-RG-1 (current behavior): "transactions" are BEGIN/COMMIT sent through the shared pool helper db.query (each call may use a different pooled connection)', async () => {
   useDb([[/DELETE FROM courseset_restrictgrp/, [{}]]]);
   await R.a_removeCourseRestrictGroup(rq(7, { cr_restgrp_id: 41 }), mkRes());

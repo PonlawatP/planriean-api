@@ -4,6 +4,14 @@ const db = require("../db");
 const ExtractJwt = require("passport-jwt").ExtractJwt;
 //ใช้ในการประกาศ Strategy
 const JwtStrategy = require("passport-jwt").Strategy;
+// Accept both `Authorization: Bearer <jwt>` (swagger) and the raw jwt the frontends send. Strips the prefix in place
+// so every downstream reader of req.headers.authorization (passport, jwt-simple handlers) sees the bare token.
+const stripBearer = (h) => (typeof h === "string" && /^bearer\s+/i.test(h) ? h.replace(/^bearer\s+/i, "").trim() : h);
+const normalizeAuthHeader = (req, res, next) => {
+  if (req.headers["authorization"] !== undefined) req.headers["authorization"] = stripBearer(req.headers["authorization"]);
+  next();
+};
+
 const jwtOptions = {
   jwtFromRequest: ExtractJwt.fromHeader("authorization"),
   secretOrKey: process.env.SECRET_JWT,
@@ -51,4 +59,6 @@ const requireJWTAuth = passport.authenticate("jwt", { session: false });
 
 module.exports = {
   requireJWTAuth,
+  normalizeAuthHeader,
+  stripBearer,
 };

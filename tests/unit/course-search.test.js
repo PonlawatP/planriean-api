@@ -112,22 +112,13 @@ test('day filter matches the FIRST meeting day of a section', async () => {
 
 // BUG-COURSE-3 (course/index.js:249, elysia-server.js:289): only time.substring(0,2) is compared,
 // so a section meeting Mo + We is invisible when filtering by We.
-test.todo('BUG-COURSE-3: day filter should match ANY meeting day of a multi-day section', async () => {
+test('M8: day filter matches ANY meeting day of a multi-day section', async () => {
   useCatalog({ '2569/1': [row({ sec: 1, time: 'Mo09:00-12:00 A;We13:00-15:00 A' })] });
   const r = await search(freshCourse(), { year: 2569, semester: 1 }, body({ date: ['We'] }));
   expect(r.subjects.map((s) => s.sec)).toEqual([1]);
 });
 
-test('BUG-COURSE-2 (current behavior): module-level courseCache ignores (uni_id, year, semester) for 10 min', async () => {
-  useCatalog({ '2569/1': [row({ year: 2569, semester: 1 })], '2569/2': [row({ year: 2569, semester: 2 })] });
-  const C = freshCourse();
-  await search(C, { year: 2569, semester: 1 }, body());
-  const r = await search(C, { year: 2569, semester: 2 }, body());
-  // the semester-2 request is answered with semester-1 rows (course/index.js:53-55)
-  expect(r.subjects[0].semester).toBe(1);
-});
-
-test.todo('BUG-COURSE-2: a semester-2 search after a semester-1 search must return semester-2 rows', async () => {
+test('H9: a semester-2 search after a semester-1 search returns semester-2 rows (cache keyed by uni/year/semester)', async () => {
   useCatalog({ '2569/1': [row({ year: 2569, semester: 1 })], '2569/2': [row({ year: 2569, semester: 2 })] });
   const C = freshCourse();
   await search(C, { year: 2569, semester: 1 }, body());
@@ -135,11 +126,38 @@ test.todo('BUG-COURSE-2: a semester-2 search after a semester-1 search must retu
   expect(r.subjects[0].semester).toBe(2);
 });
 
-test('BUG-COURSE-4 (schema drift, current behavior): Express SELECT asks for exam_*_override columns that the local schema lacks', async () => {
+test('H9 negative: another university with the same year/semester is not served from the first one cache', async () => {
+  __db.handler = async (sql, p) => {
+    if (sql.includes('FROM university_detail')) return { rows: [{ uni_key: 'u' + p[0], formatted_date: UPDATED }], rowCount: 1 };
+    if (sql.includes('LEFT JOIN course_seat')) return { rows: [{ suj_real_code: '0041001', sec: 1, seat_remain: 1, seat_available: 2 }], rowCount: 1 };
+    if (sql.includes('course_detail.uni_id,')) return { rows: [row({ uni_id: p[0] })], rowCount: 1 };
+    return { rows: [{ suj_real_id: '0041001', suj_name_th: 'x' }], rowCount: 1 };
+  };
+  const C = freshCourse();
+  await search(C, { uni_id: 1, year: 2569, semester: 1 }, body());
+  const r = await search(C, { uni_id: 2, year: 2569, semester: 1 }, body());
+  expect(r.subjects[0].uni_id).toBe(2);
+});
+
+test('H9: same uni/year/semester still hits the in-process cache (one course_detail query)', async () => {
+  useCatalog({ '2569/1': [row()] });
+  const C = freshCourse();
+  await search(C, { year: 2569, semester: 1 }, body());
+  await search(C, { year: 2569, semester: 1 }, body({ type: ['0041*'] }));
+  expect(__db.calls.filter((c) => c[0].includes('course_detail.uni_id,')).length).toBe(1);
+});
+
+test('H8: Express SELECT no longer asks for exam_*_override columns (absent from local schema)', async () => {
   useCatalog({ '2569/1': [row()] });
   await search(freshCourse(), { year: 2569, semester: 1 }, body());
-  const q = __db.calls.find((c) => c[0].includes('course_detail.exam_mid_override'));
-  expect(q).toBeDefined(); // live DB answers: column course_detail.exam_mid_override does not exist -> 500
+  expect(__db.calls.some((c) => c[0].includes('_override'))).toBe(false);
+});
+
+test('H8: Express passes (req, res, next); `next` in the 3rd slot must not be mistaken for params', async () => {
+  useCatalog({ '2569/2': [row({ year: 2569, semester: 2 })] });
+  const res = { body: null, status() { return this; }, send(b) { this.body = b; return this; }, json(b) { this.body = b; return this; } };
+  await freshCourse().getCoursesSpecific({ params: { uni_id: 1, year: 2569, semester: 2 }, body: body() }, res, () => {});
+  expect(res.body.subjects[0].semester).toBe(2);
 });
 
 test('request without body.type throws -> HTTP 500 "Internal Server Error" (no 400 validation)', async () => {
@@ -155,4 +173,10 @@ test('deprecated /course/:year/:semester has no uni_id param -> defaults to uni_
   const res = { status() { return this; }, json(b) { this.body = b; return this; }, send(b) { this.body = b; return this; } };
   await freshCourse().getCoursesSpecific({ params: { year: 2569, semester: 1 }, body: body() }, res);
   expect(seatQuery()[1][0]).toBe(1);
+});
+
+test('M8 negative: day filter still excludes sections without that day', async () => {
+  useCatalog({ '2569/1': [row({ sec: 1, time: 'Mo09:00-12:00 A;We13:00-15:00 A' })] });
+  const r = await search(freshCourse(), { year: 2569, semester: 1 }, body({ date: ['Fr'] }));
+  expect(r.subjects).toEqual([]);
 });

@@ -11,6 +11,7 @@ const { scheduleTokenRefresh, verifyTransporter } = require("./utils/mailutil");
 
 // Import the course module
 const { getUserFromToken } = require("./utils/userutil");
+const { stripBearer } = require("./middleware/requireJWTAuth");
 const courseModule = require("./routes/course");
 const planModule = require("./routes/plan");
 
@@ -21,8 +22,7 @@ const COURSE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 // Cache variables
 let subjectCache = null;
 let lastCacheTime = null;
-let courseCache = null;
-let lastCourseCacheTime = null;
+const courseCache = new Map(); // key `${uni_id}:${year}:${semester}` -> { rows, at }
 
 // Define the getSubjects function directly in this file
 async function getSubjects() {
@@ -48,8 +48,10 @@ async function getSubjects() {
 // Define the getCoursesData function directly in this file
 async function getCoursesData(data) {
   // Check if cache exists and is still valid
-  if (courseCache && lastCourseCacheTime && (Date.now() - lastCourseCacheTime < COURSE_CACHE_DURATION)) {
-    return courseCache;
+  const cacheKey = data.join(':'); // data = [uni_id, year, semester]
+  const hit = courseCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < COURSE_CACHE_DURATION) {
+    return hit.rows;
   }
 
   // If no cache or expired, run the query
@@ -76,17 +78,19 @@ async function getCoursesData(data) {
   );
 
   // Store in cache
-  courseCache = result.rows;
-  lastCourseCacheTime = Date.now();
+  courseCache.set(cacheKey, { rows: result.rows, at: Date.now() });
 
-  return courseCache;
+  return result.rows;
 }
 
 // Port for ElysiaJS server (different from Express)
 const ELYSIA_PORT = process.env.ELYSIA_PORT || 3031;
 
 // Create a specialized version of getCoursesSpecific for Elysia
-async function elysiaGetCoursesSpecific(context, parameter = null, data = null) {
+// Single-arg signature on purpose: Elysia only parses the body when the handler's source reads context.body
+// and the function takes just (context); extra default params made context.body undefined (H8).
+async function elysiaGetCoursesSpecific(context) {
+  const parameter = null, data = null;
   try {
     // Add response compression
     // context.set.headers['Content-Encoding'] = 'gzip';
@@ -286,7 +290,7 @@ async function elysiaGetCoursesSpecific(context, parameter = null, data = null) 
     const searchResults = [];
     for (const item of enhancedResults) {
       // Skip early if possible
-      if (searchData.date.length > 0 && !searchData.date.includes(item.time.substring(0, 2))) {
+      if (searchData.date.length > 0 && !item.time.split(";").some((m) => searchData.date.includes(m.trim().substring(0, 2)))) {
         continue;
       }
       
@@ -364,7 +368,8 @@ async function getUniKey(uni_id) {
 }
 
 // Elysia handler: POST /university/:uni_id/course/:year/:semester/seats
-async function elysiaGetPlanSubjectSeats(context, parameter = null, data = null) {
+async function elysiaGetPlanSubjectSeats(context) {
+  const parameter = null, data = null; // single-arg signature, see elysiaGetCoursesSpecific
   try {
     const { year, semester } = parameter || context.params;
     const uni_id = parameter?.uni_id || context.params.uni_id || 1;
@@ -530,7 +535,7 @@ const app = new Elysia()
       switch (message) {
         case "register":
           /* register websocket into redis session to reusing on token session (like. add/edit/remove subject) */
-          const { authorization } = ws.data.headers;
+          const authorization = stripBearer(ws.data.headers.authorization);
           const { plan_id } = parameter;
           ws.send({
             message: "page_loading",

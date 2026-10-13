@@ -101,7 +101,7 @@ async function getPlanSubjectsRestricted(req, res) {
       "SELECT * FROM plan_detail WHERE plan_id = $1",
       [plan_id]
     );
-    if (result.rows.length > 0 || result.rows[0].plan_uid == user.uid) {
+    if (result.rows.length > 0 && user != null && result.rows[0].user_uid == user.uid) {
       const plan_detail = result.rows[0];
       const subjects_res = await getSubjectDataFromPlanSubject(
         plan_id,

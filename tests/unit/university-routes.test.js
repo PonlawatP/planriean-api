@@ -54,18 +54,7 @@ test('faculty add/edit/remove status codes', async () => {
   res = mkRes(); await U.removeFacultyDetail(rq({}, { uni_id: 1, fac_id: 2 }), res); expect(res.code).toBe(404);
 });
 
-// BUG A-UNI-2 (security): src/index.js:182-192 guards university + faculty CRUD with requireJWTAuth only and the handlers
-// fetch the user but NEVER check a role. Any registered student can create/rename/delete a university or faculty.
-test.failing('BUG A-UNI-2: a user with no admin role must be refused (403) when deleting a university', async () => {
-  plainUser();
-  const res = mkRes(); await U.removeUniversityDetail(rq({}, { uni_id: 1 }), res);
-  expect(res.code).toBe(403);
-});
-test.failing('BUG A-UNI-2: a user with no admin role must be refused (403) when creating a faculty', async () => {
-  plainUser();
-  const res = mkRes(); await U.addFacultyDetail(rq({ fac_id: 1 }, { uni_id: 1 }), res);
-  expect(res.code).toBe(403);
-});
+// A-UNI-2 / H3: role guards live in middleware/requireRole.js (wired in src/index.js); covered in authz-guards.test.js
 
 // getUniversityDetailFunc / list / season
 const uniWorld = (seasons) => { __db.handler = async (sql) => {
