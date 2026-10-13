@@ -11,7 +11,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start-elysia": "bun --watch src/elysia-server.js",
     "start-hybrid": "bash ./start-hybrid.sh",
-    "load-test": "bun run load-test.js"
+    "load-test": "bun run load-test.js",
+    "db:info": "bash db/flyway.sh info",
+    "db:migrate": "bash db/flyway.sh migrate"
   },
   "keywords": [],
   "author": "",
