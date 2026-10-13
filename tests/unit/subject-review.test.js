@@ -130,11 +130,7 @@ test('unknown subject -> 200 {success:false, message:"ไม่พบข้อ�
   expect(res.code).toBe(200);
   expect(res.body).toEqual({ success: false, message: 'ไม่พบข้อมูลวิชา โปรดติดต่อทีมงาน' });
 });
-test('BUG-SUBJ-2 (current behavior): when every registration window has already ended, getCurrentSeason returns null and subject detail rejects (Express answers 500)', async () => {
-  useDb(detailRules([], [PAST_AND_FUTURE[0]]));
-  await expect(S.getSubjectDetail(rq(null), mkRes())).rejects.toThrow();
-});
-test.todo('BUG-SUBJ-2: subject detail must still render when no future registration window is configured', async () => {
+test('BUG-SUBJ-2 fixed (H10): subject detail still renders when every registration window has already ended', async () => {
   useDb(detailRules([], [PAST_AND_FUTURE[0]]));
   const res = mkRes(); await S.getSubjectDetail(rq(null), res);
   expect(res.body.success).toBe(true);

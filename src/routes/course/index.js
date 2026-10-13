@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { withSeatNames } = require("../../utils/seatutil");
 
 const Redis = require('ioredis');
 const redis = new Redis({
@@ -164,9 +165,9 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
       const cachedData = await redis.get(searchData_);
       if (cachedData) {
         if (parameter != null || data != null) {
-          return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
+          return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData).map(withSeatNames) };
         }
-        return res.json({ cached: true, updated: data_updated, subjects: JSON.parse(cachedData) });
+        return res.json({ cached: true, updated: data_updated, subjects: JSON.parse(cachedData).map(withSeatNames) });
       }
     }
 
@@ -228,7 +229,7 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
       return matchingCourse ? {
         ...row,
         name_th: subjectsMap[row.suj_real_code] || null,
-        ...matchingCourse
+        ...withSeatNames(matchingCourse)
       } : null;
     }).filter(r => r != null);
     // console.timeEnd('map');

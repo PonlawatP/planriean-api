@@ -455,7 +455,7 @@ async function a_manageRegisterTimeline(req, res) {
         });
       } else {
         return res.status(405).json({
-          success: CSSFontFeatureValuesRule,
+          success: false,
           message: "Method not allowed.",
         });
       }

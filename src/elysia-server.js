@@ -7,6 +7,7 @@ const { Elysia } = require("elysia");
 const { cors } = require('@elysiajs/cors');
 const db = require("./db");
 const redis = require("./redis");
+const { withSeatNames } = require("./utils/seatutil");
 const { scheduleTokenRefresh, verifyTransporter } = require("./utils/mailutil");
 
 // Import the course module
@@ -177,8 +178,8 @@ async function elysiaGetCoursesSpecific(context) {
       const seats = unique.map(s => {
         const key = `${s.code}::${s.sec}`;
         const item = cachedMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
-        // Normalize fields: DB columns: seat_remain = available, seat_available = total
-        return { code: item.code, sec: Number(item.sec) || item.sec, seat_remain: (typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1), seat_available: (typeof item.seat_available !== 'undefined' ? item.seat_available : -1) };
+        // DB columns: seat_remain = seats TAKEN, seat_available = total capacity (see utils/seatutil.js)
+        return withSeatNames({ code: item.code, sec: Number(item.sec) || item.sec, seat_remain: (typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1), seat_available: (typeof item.seat_available !== 'undefined' ? item.seat_available : -1) });
       });
 
       return { cached: misses.length === 0, updated: data_updated, seats };
@@ -213,7 +214,7 @@ async function elysiaGetCoursesSpecific(context) {
       
       // If we already have cached data and it's still valid, return it
       if (cachedData && lastDataUpdatedCacheTime == data_updated) {
-        return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
+        return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData).map(withSeatNames) };
       }
     } else if (cachedData && lastDataUpdatedCacheTime) {
       // We have both cache values, check if valid
@@ -227,7 +228,7 @@ async function elysiaGetCoursesSpecific(context) {
       data_updated = result_updated.rows[0].formatted_date;
       
       if (lastDataUpdatedCacheTime == data_updated) {
-        return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
+        return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData).map(withSeatNames) };
       }
     }
 
@@ -282,7 +283,7 @@ async function elysiaGetCoursesSpecific(context) {
         // Use Object.assign for faster object merging
         enhancedResults.push(Object.assign({}, row, {
           name_th: subjectsMap.get(row.suj_real_code) || null
-        }, matchingCourse));
+        }, withSeatNames(matchingCourse)));
       }
     }
 
@@ -423,12 +424,12 @@ async function elysiaGetPlanSubjectSeats(context) {
     if (misses.length === 0) {
       const seats = unique.map(s => {
         const item = cachedMap.get(`${s.code}::${s.sec}`) || {};
-        return {
+        return withSeatNames({
           code: s.code,
           sec: Number(s.sec) || s.sec,
           seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
           seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
-        };
+        });
       });
       return { cached: true, updated: data_updated, seats };
     }
@@ -479,12 +480,12 @@ async function elysiaGetPlanSubjectSeats(context) {
     const seats = unique.map(s => {
       const key = `${s.code}::${s.sec}`;
       const item = cachedMap.get(key) || dbMap.get(key) || { code: s.code, sec: s.sec, seat_remain: -1, seat_available: -1 };
-      return {
+      return withSeatNames({
         code: item.code,
         sec: Number(item.sec) || item.sec,
         seat_remain: typeof item.seat_remain !== 'undefined' ? item.seat_remain : -1,
         seat_available: typeof item.seat_available !== 'undefined' ? item.seat_available : -1
-      };
+      });
     });
 
     return { cached: false, updated: data_updated, seats };

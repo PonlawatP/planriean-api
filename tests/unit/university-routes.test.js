@@ -95,11 +95,13 @@ test.failing('BUG A-UNI-3: type=maintenance should be true when the university h
   expect((await U.getUniversityDetailFunc(1, 'maintenance')).maintenance).toBe(true);
 });
 // BUG A-UNI-1 end-to-end: before the first season ends the whole university detail throws -> route answers 404.
-test('BUG A-UNI-1 (documented): GET /university/:id 404 "University Not Found" when today is before first season end', async () => {
+test('H10 fixed: GET /university/:id before the first season ends answers data (current null, incomming = first season)', async () => {
   uniWorld([{ year: 1, seamster_round: 1, ss_start: future(1), ss_end: future(5) }]);
   const res = mkRes(); await U.getUniversityDetail({ params: { uni_id: 1 }, query: {} }, res);
-  expect(res.code).toBe(404);
-  expect(res.body).toBe('University Not Found');
+  expect(res.code).not.toBe(404);
+  const seasons = res.body.university_data.seasons;
+  expect(seasons.current).toBeNull();
+  expect(seasons.incomming).toEqual({ year: 1, semester: 1 });
 });
 test('getUniversitySeasons: 404 for unknown university; groups years desc', async () => {
   let res = mkRes(); await U.getUniversitySeasons({ params: { uni_id: 9 } }, res);

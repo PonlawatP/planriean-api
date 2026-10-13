@@ -56,7 +56,7 @@ test('empty type[] defaults to GE prefix "004*" and is sent to SQL as SIMILAR TO
   expect(r.cached).toBe(false);
   expect(r.updated).toBe(UPDATED);
   expect(r.subjects).toHaveLength(1);
-  expect(r.subjects[0]).toMatchObject({ code: '0041001', name_th: 'ภาษาอังกฤษ', seat_remain: 5, seat_available: 40 });
+  expect(r.subjects[0]).toMatchObject({ code: '0041001', name_th: 'ภาษาอังกฤษ', seat_remain: 5, seat_available: 40, seat_taken: 5, seat_capacity: 40 });
 });
 
 test('explicit code[] wins over type[] and is OR-joined with "|"', async () => {

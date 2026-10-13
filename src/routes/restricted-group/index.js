@@ -205,6 +205,7 @@ async function a_editCourseRestrictGroup(req, res) {
 }
 
 async function a_removeCourseRestrictGroup(req, res) {
+  let client; // one pooled client for the whole transaction
   try {
     const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
@@ -212,24 +213,25 @@ async function a_removeCourseRestrictGroup(req, res) {
     if (user != null) {
       // Authorization checks here
 
-      await db.query("BEGIN"); // Start a transaction
+      client = await db.connect();
+      await client.query("BEGIN"); // Start a transaction
 
       // Delete related users and subjects first
-      await db.query("DELETE FROM restrictgrp_user WHERE cr_restgrp_id = $1", [
+      await client.query("DELETE FROM restrictgrp_user WHERE cr_restgrp_id = $1", [
         cr_restgrp_id,
       ]);
-      await db.query(
+      await client.query(
         "DELETE FROM restrictgrp_subject WHERE cr_restgrp_id = $1",
         [cr_restgrp_id]
       );
 
       // Delete the restriction group
-      const deleteResult = await db.query(
+      const deleteResult = await client.query(
         "DELETE FROM courseset_restrictgrp WHERE uni_id = $1 AND cr_restgrp_id = $2",
         [uni_id, cr_restgrp_id]
       );
 
-      await db.query("COMMIT"); // Commit the transaction
+      await client.query("COMMIT"); // Commit the transaction
 
       if (deleteResult.rowCount > 0) {
         res.status(200).json({
@@ -247,15 +249,18 @@ async function a_removeCourseRestrictGroup(req, res) {
     }
   } catch (err) {
     console.error(err);
-    await db.query("ROLLBACK"); // Rollback on error
+    if (client) await client.query("ROLLBACK").catch(() => {});
     res.status(500).json({
       success: false,
       message: "Failed to remove course restriction group",
     });
+  } finally {
+    if (client) client.release();
   }
 }
 
 async function a_addCourseRestrictGroupUsers(req, res) {
+  let client; // one pooled client for the whole transaction
   try {
     const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
@@ -265,30 +270,31 @@ async function a_addCourseRestrictGroupUsers(req, res) {
       // You might want to add authorization checks here to ensure the user has the right to add users
 
       // Use a transaction to ensure all inserts are successful
-      await db.query("BEGIN");
+      client = await db.connect();
+      await client.query("BEGIN");
 
       for (const std_id of users) {
-        const preInsertResult = await db.query(
+        const preInsertResult = await client.query(
           `SELECT * FROM restrictgrp_user WHERE cr_restgrp_id = $1 AND std_id = $2;`, // Prevent duplicate entries
           [cr_restgrp_id, std_id]
         );
         if (preInsertResult.rowCount != 0) {
           // Handle the case where insertion failed (e.g., due to constraint violation)
-          await db.query("ROLLBACK");
+          await client.query("ROLLBACK");
           return res.status(500).json({
             success: false,
             message: `Failed to add user ${std_id} to restriction group ${cr_restgrp_id}`,
           });
         }
 
-        await db.query(
+        await client.query(
           `INSERT INTO restrictgrp_user (cr_restgrp_id, std_id) 
              VALUES ($1, $2);`, // Prevent duplicate entries
           [cr_restgrp_id, std_id]
         );
       }
 
-      await db.query("COMMIT");
+      await client.query("COMMIT");
 
       res.status(201).json({
         success: true,
@@ -299,10 +305,13 @@ async function a_addCourseRestrictGroupUsers(req, res) {
     }
   } catch (err) {
     console.error(err);
+    if (client) await client.query("ROLLBACK").catch(() => {});
     res.status(500).json({
       success: false,
       message: "Failed to add users to restriction group",
     });
+  } finally {
+    if (client) client.release();
   }
 }
 
@@ -345,6 +354,7 @@ async function a_removeCourseRestrictGroupUsers(req, res) {
 }
 
 async function a_updateCourseRestrictGroupUsers(req, res) {
+  let client; // one pooled client for the whole transaction
   try {
     const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
@@ -361,23 +371,24 @@ async function a_updateCourseRestrictGroupUsers(req, res) {
 
       // For simplicity, let's assume you want to replace the entire list:
 
-      await db.query("BEGIN");
+      client = await db.connect();
+      await client.query("BEGIN");
 
       // Delete existing users
-      await db.query("DELETE FROM restrictgrp_user WHERE cr_restgrp_id = $1", [
+      await client.query("DELETE FROM restrictgrp_user WHERE cr_restgrp_id = $1", [
         cr_restgrp_id,
       ]);
 
       // Insert the new list of users
       for (const std_id of users) {
-        const insertResult = await db.query(
+        const insertResult = await client.query(
           `INSERT INTO restrictgrp_user (cr_restgrp_id, std_id) 
              VALUES ($1, $2)`,
           [cr_restgrp_id, std_id]
         );
 
         if (insertResult.rowCount === 0) {
-          await db.query("ROLLBACK");
+          await client.query("ROLLBACK");
           return res.status(500).json({
             success: false,
             message: `Failed to update user ${std_id} for restriction group ${cr_restgrp_id}`,
@@ -385,7 +396,7 @@ async function a_updateCourseRestrictGroupUsers(req, res) {
         }
       }
 
-      await db.query("COMMIT");
+      await client.query("COMMIT");
 
       res.status(200).json({
         success: true,
@@ -396,14 +407,18 @@ async function a_updateCourseRestrictGroupUsers(req, res) {
     }
   } catch (err) {
     console.error(err);
+    if (client) await client.query("ROLLBACK").catch(() => {});
     res.status(500).json({
       success: false,
       message: "Failed to update restriction group users",
     });
+  } finally {
+    if (client) client.release();
   }
 }
 
 async function a_addCourseRestrictGroupSubjects(req, res) {
+  let client; // one pooled client for the whole transaction
   try {
     const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
@@ -412,15 +427,16 @@ async function a_addCourseRestrictGroupSubjects(req, res) {
     if (user != null) {
       // Authorization checks here
 
-      await db.query("BEGIN");
+      client = await db.connect();
+      await client.query("BEGIN");
 
       for (const subject of subjects) {
-        const preInsertResult = await db.query(
+        const preInsertResult = await client.query(
           `SELECT * FROM restrictgrp_subject WHERE cr_restgrp_id = $1 AND suj_id = $2 AND sec = $3;`, // Prevent duplicate entries
           [cr_restgrp_id, subject.suj_id, subject.sec]
         );
         if (preInsertResult.rowCount != 0) {
-          await db.query("ROLLBACK");
+          await client.query("ROLLBACK");
           return res.status(500).json({
             success: false,
             message: `Failed to add subject ${subject.suj_id} (sec: ${subject.sec}) to restriction group ${cr_restgrp_id}`,
@@ -428,14 +444,14 @@ async function a_addCourseRestrictGroupSubjects(req, res) {
         }
 
         // Assuming your subject object has suj_id and sec properties
-        await db.query(
+        await client.query(
           `INSERT INTO restrictgrp_subject (cr_restgrp_id, suj_id, sec)
              VALUES ($1, $2, $3);`, // Prevent duplicates
           [cr_restgrp_id, subject.suj_id, subject.sec]
         );
       }
 
-      await db.query("COMMIT");
+      await client.query("COMMIT");
 
       res.status(201).json({
         success: true,
@@ -446,10 +462,13 @@ async function a_addCourseRestrictGroupSubjects(req, res) {
     }
   } catch (err) {
     console.error(err);
+    if (client) await client.query("ROLLBACK").catch(() => {});
     res.status(500).json({
       success: false,
       message: "Failed to add subjects to restriction group",
     });
+  } finally {
+    if (client) client.release();
   }
 }
 
@@ -502,6 +521,7 @@ async function a_removeCourseRestrictGroupSubjects(req, res) {
 }
 
 async function a_updateCourseRestrictGroupSubjects(req, res) {
+  let client; // one pooled client for the whole transaction
   try {
     const user = await getUserFromRequest(req);
     const { uni_id, cr_restgrp_id } = req.params;
@@ -512,24 +532,25 @@ async function a_updateCourseRestrictGroupSubjects(req, res) {
 
       // Assuming you want to replace the entire list of subjects:
 
-      await db.query("BEGIN");
+      client = await db.connect();
+      await client.query("BEGIN");
 
       // Delete existing subjects
-      await db.query(
+      await client.query(
         "DELETE FROM restrictgrp_subject WHERE cr_restgrp_id = $1",
         [cr_restgrp_id]
       );
 
       // Insert the new list of subjects
       for (const subject of subjects) {
-        const insertResult = await db.query(
+        const insertResult = await client.query(
           `INSERT INTO restrictgrp_subject (cr_restgrp_id, suj_id, sec) 
              VALUES ($1, $2, $3)`,
           [cr_restgrp_id, subject.suj_id, subject.sec]
         );
 
         if (insertResult.rowCount === 0) {
-          await db.query("ROLLBACK");
+          await client.query("ROLLBACK");
           return res.status(500).json({
             success: false,
             message: `Failed to update subject ${subject.suj_id} (sec: ${subject.sec}) for restriction group ${cr_restgrp_id}`,
@@ -537,7 +558,7 @@ async function a_updateCourseRestrictGroupSubjects(req, res) {
         }
       }
 
-      await db.query("COMMIT");
+      await client.query("COMMIT");
 
       res.status(200).json({
         success: true,
@@ -548,10 +569,13 @@ async function a_updateCourseRestrictGroupSubjects(req, res) {
     }
   } catch (err) {
     console.error(err);
+    if (client) await client.query("ROLLBACK").catch(() => {});
     res.status(500).json({
       success: false,
       message: "Failed to update restriction group subjects",
     });
+  } finally {
+    if (client) client.release();
   }
 }
 
