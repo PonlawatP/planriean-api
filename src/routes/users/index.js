@@ -11,27 +11,34 @@ const {
   getLargestRole,
   isUserHadRole,
   getRoleIndex,
+  hasRoleFor,
+  userType,
 } = require("./userTypes");
 
 async function getAllUsers(req, res) {
   try {
-    const jwt_dc = jwt.decode(
-      req.headers["authorization"],
-      process.env.SECRET_JWT
-    );
-    let data = null;
-
-    if (jwt_dc) {
-      const { uni_id = 0 } = req.params;
-      const { page = 1, limit = 25, search = "", role = "" } = req.query;
-      data = await getUsers(uni_id, page, limit, search, role);
+    // jwt-simple's decode verifies the signature; the real gap was "any valid token passes". Require helper+ in scope.
+    const user = await getUserFromRequest(req);
+    const { uni_id = 0 } = req.params;
+    if (!user || !hasRoleFor(user.roles, 1, uni_id)) {
+      return res.status(403).json({ message: "Permission forbidden." });
     }
-
-    res.json(data);
+    const { page = 1, search = "", role = "" } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 100);
+    res.json(await getUsers(uni_id, page, limit, search, role));
   } catch (err) {
     console.error(err);
     res.status(403).json({ message: "Invalid Input" });
   }
+}
+
+// Actor may only grant/edit roles strictly below own rank; admin (top rank) may grant admin. Unknown role names rejected.
+function canGrantRole(actLargestRole, role) {
+  const idx = getRoleIndex(role);
+  return (
+    idx >= 0 &&
+    (idx < actLargestRole.index || (idx === actLargestRole.index && idx === userType.length - 1))
+  );
 }
 
 async function a_addUserRole(req, res) {
@@ -58,6 +65,12 @@ async function a_addUserRole(req, res) {
     }
 
     const roleIndex = getRoleIndex(role);
+
+    if (!canGrantRole(actLargestRole, role)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Permission forbidden." });
+    }
 
     if (roleIndex === 1 || roleIndex === 2) {
       if (uni_id == null || (roleIndex === 1 && fac_id == null)) {
@@ -132,7 +145,12 @@ async function a_editUserRole(req, res) {
     const actLargestRole = getLargestRole(user.roles);
 
     const { old, edit } = req.body;
-    // console.log(old, edit);
+    if (actLargestRole.index <= 1) {
+      return res.status(403).json({ success: false, message: "Permission forbidden." });
+    }
+    if (!old || !edit) {
+      return res.status(400).json({ success: false, message: "old and edit are required." });
+    }
 
     // Edit role
     await editUserRole(uid, { old, edit }, actLargestRole, res);
@@ -148,6 +166,9 @@ async function a_deleteUserRole(req, res) {
     const user = await getUserFromRequest(req);
     const actLargestRole = getLargestRole(user.roles);
 
+    if (actLargestRole.index <= 1) {
+      return res.status(403).json({ success: false, message: "Permission forbidden." });
+    }
     // Remove role
     const { uni_id, fac_id, major_id, role } = req.body;
     await removeUserRole(
@@ -164,6 +185,12 @@ async function a_deleteUserRole(req, res) {
 
 async function editUserRole(uid, { old, edit }, actLargestRole, res) {
   if (!isValidRoleEdit(actLargestRole, old.role, old.uni_id, old.fac_id)) {
+    return res
+      .status(403)
+      .json({ success: false, message: "Permission forbidden." });
+  }
+
+  if (!canGrantRole(actLargestRole, edit.role) || isCrossUniversity(actLargestRole, edit.uni_id)) {
     return res
       .status(403)
       .json({ success: false, message: "Permission forbidden." });

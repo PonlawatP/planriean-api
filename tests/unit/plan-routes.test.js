@@ -4,7 +4,8 @@
 import { test, expect, mock, beforeEach } from 'bun:test';
 process.env.SECRET_JWT = 'test-secret-placeholder';
 globalThis.__db ??= { handler: async () => ({ rows: [], rowCount: 0 }), calls: [] };
-mock.module('../../src/db', () => ({ query: async (t, p) => { __db.calls.push([t, p]); return __db.handler(t, p); } }));
+const __q = async (t, p) => { __db.calls.push([t, p]); return __db.handler(t, p); };
+mock.module('../../src/db', () => ({ query: __q, connect: async () => ({ query: __q, release() {} }) }));
 globalThis.__redis ??= { store: new Map(), ops: [] };
 class FakeRedis {
   async get(k) { __redis.ops.push(['get', k]); return __redis.store.get(k) ?? null; }
@@ -37,6 +38,9 @@ const rq = (uid, params = {}, body = {}) => ({ headers: { authorization: jwt.enc
 const sqlCalls = (re) => __db.calls.filter((c) => re.test(c[0]));
 const COURSE = { code: '0041001', sec: 1, year: 2569, semester: 1, name_en: 'Eng', lecturer: 'Dr. X', cr_id: 99, credit: '3(3-0-6)', time: 'Mo13:00-16:00 A' };
 const planRules = (plan = PLAN, subjects = [{ code: '0041001', sec: 1, mute_alert: true }]) => [
+  // save: owner check = UPDATE ... WHERE plan_id AND user_uid RETURNING (matches only the owner's row)
+  [/UPDATE "plan_detail" SET "update_at"[\s\S]*"user_uid" = \$3/, (sql, p) => (plan && p[2] == plan.user_uid ? [plan] : [])],
+  [/SELECT 1 FROM plan_detail WHERE plan_id/, plan ? [{ '?column?': 1 }] : []],
   [/SELECT \* FROM plan_detail WHERE plan_id/, plan ? [plan] : []],
   [/SELECT user_uid FROM plan_detail/, plan && !plan.is_delete ? [{ user_uid: plan.user_uid }] : []],
   [/SELECT \* FROM plan_subject/, subjects],
@@ -83,13 +87,13 @@ test('WebSocket path (ws_session) returns the error object instead of writing a 
 });
 
 // ---------- DELETE /plan/view/:plan_id (index.js:146) ----------
-test('BUG-PLAN-1 (current behavior): a NON-owner can soft-delete someone else\'s plan (isPlanOwner uses || and a non-existent column)', async () => {
+test('owner can soft-delete own plan (+ its folder children)', async () => {
   useDb(planRules());
-  const res = mkRes(); await P.deletePlanUser(rq(8, { plan_id: 10 }), res);
+  const res = mkRes(); await P.deletePlanUser(rq(7, { plan_id: 10 }), res);
   expect(res.body).toEqual({ success: true });
-  expect(sqlCalls(/SET "is_delete" = true/)[0][1]).toEqual([10, 10]); // plan + its folder children
+  expect(sqlCalls(/SET "is_delete" = true/)[0][1]).toEqual([10, 10]);
 });
-test.todo('BUG-PLAN-1: DELETE by a non-owner must be 403 and must not update plan_detail', async () => {
+test('H1/BUG-PLAN-1: DELETE by a non-owner must be 403 and must not update plan_detail', async () => {
   useDb(planRules());
   const res = mkRes(); await P.deletePlanUser(rq(8, { plan_id: 10 }), res);
   expect(res.code).toBe(403);
@@ -102,13 +106,13 @@ test('DELETE of a non-existent plan -> 403 (isPlanOwner throws on rows[0] and sw
 });
 
 // ---------- GET /plan/view/:plan_id/subject (index.js:147) ----------
-test('BUG-PLAN-2 (current behavior): a NON-owner can read the subjects of a PRIVATE plan', async () => {
+test('owner can read subjects of own private plan', async () => {
   useDb(planRules());
-  const res = mkRes(); await P.getPlanSubjectsUser(rq(8, { plan_id: 10 }), res);
+  const res = mkRes(); await P.getPlanSubjectsUser(rq(7, { plan_id: 10 }), res);
   expect(res.code).toBe(200);
   expect(res.body.subjects).toHaveLength(1);
 });
-test.todo('BUG-PLAN-2: GET subjects of a private plan by a non-owner must be 403', async () => {
+test('H1/BUG-PLAN-2: GET subjects of a private plan by a non-owner must be 403', async () => {
   useDb(planRules());
   const res = mkRes(); await P.getPlanSubjectsUser(rq(8, { plan_id: 10 }), res);
   expect(res.code).toBe(403);
@@ -124,17 +128,17 @@ test('PUT plan: non-owner -> 403 and no UPDATE; missing/deleted plan -> 404', as
   res = mkRes(); await P.updatePlanUser(rq(7, { plan_id: 10 }, {}), res);
   expect(res.code).toBe(404);
 });
-test('PUT plan is a FULL overwrite: uni/fac/major come from the caller\'s profile, omitted body fields become NULL', async () => {
+test('PUT plan (H5): only sent columns are SET; omitted ones are left alone, uni/fac/major use COALESCE', async () => {
   useDb([...planRules(), [/UPDATE "plan_detail"/, [{ plan_id: 10 }]]]);
   const res = mkRes(); await P.updatePlanUser(rq(7, { plan_id: 10 }, { plan_name: 'ใหม่', status: 'public' }), res);
   expect(res.body.success).toBe(true);
-  const p = sqlCalls(/UPDATE "plan_detail" SET "plan_name"/)[0][1];
-  expect(p[0]).toBe('ใหม่');
-  expect(p.slice(3, 6)).toEqual([1, 12, 3]); // user.uni_id, user.fac_id, user.major_id (index.js:279-281)
-  expect(p[1]).toBeUndefined(); // cr_year not sent -> NULL
-  expect(p[11]).toBe('public');
-  expect(p[15]).toBeUndefined(); // plan_settings not sent -> wiped to NULL
-  expect(p[16]).toBe(10);
+  const [sql, p] = sqlCalls(/UPDATE "plan_detail" SET/)[0];
+  expect(sql).toContain('"plan_name" = $5');
+  expect(sql).toContain('"status" = $6');
+  expect(sql).toContain('COALESCE($1, "uni_id")');
+  expect(sql).not.toContain('plan_settings');
+  expect(sql).not.toContain('"cr_year"');
+  expect(p[0]).toBe(1); expect(p[4]).toBe('ใหม่'); expect(p[5]).toBe('public'); expect(p.at(-1)).toBe(10);
 });
 
 // ---------- PUT /plan/view/:plan_id/name (index.js:145) ----------
@@ -201,56 +205,75 @@ test('save subjects: non-owner -> 403 and plan_subject untouched', async () => {
   useDb(planRules());
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(8, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), res);
   expect(res.code).toBe(403);
+  expect(res.body).toEqual({ success: false, error: 403, msg: 'Plan Forbidden' });
   expect(sqlCalls(/DELETE FROM plan_subject/)).toHaveLength(0);
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all).toContain('ROLLBACK'); expect(all).not.toContain('COMMIT'); // update_at stamp is not kept either
 });
-test('save subjects = replace-all: DELETE all rows, then one multi-row INSERT of 7 params per subject, then touch update_at', async () => {
+test('save on a missing plan -> 404 "Plan Not Found", nothing committed', async () => {
+  useDb(planRules(null));
+  const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), res);
+  expect(res.code).toBe(404);
+  expect(res.body).toEqual({ success: false, error: 404, msg: 'Plan Not Found' });
+  expect(__db.calls.map((c) => c[0].trim())).not.toContain('COMMIT');
+});
+test('save subjects = replace-all inside ONE transaction: BEGIN, owner-checked update_at stamp, DELETE, one multi-row INSERT of 7 params per subject, COMMIT', async () => {
   useDb(planRules());
   await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), mkRes());
-  const order = __db.calls.map((c) => c[0]).filter((s) => /plan_subject|update_at/.test(s) && !/SELECT/.test(s));
-  expect(order[0]).toContain('DELETE FROM plan_subject');
-  expect(order[1]).toContain('INSERT INTO "plan_subject"');
-  expect(order[2]).toContain('"update_at"');
+  const order = __db.calls.map((c) => c[0]).filter((s) => /plan_subject|update_at/.test(s) && !/SELECT|plan_subject_custom/.test(s));
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all.indexOf('BEGIN')).toBeLessThan(all.findIndex((x) => x.includes('"update_at"')));
+  expect(all.indexOf('COMMIT')).toBeGreaterThan(all.findIndex((x) => x.includes('INSERT INTO "plan_subject"')));
+  expect(order[0]).toContain('"update_at"');
+  expect(sqlCalls(/"update_at"/)[0][1].slice(1)).toEqual([10, 7]); // plan_id + caller uid: only the owner's row matches
+  expect(order[1]).toContain('DELETE FROM plan_subject');
+  expect(order[2]).toContain('INSERT INTO "plan_subject"');
   const [ins, vals] = sqlCalls(/INSERT INTO "plan_subject"/)[0];
   expect(ins).toContain('($1,$2,$3,$4,$5,$6,$7),($8,$9,$10,$11,$12,$13,$14)');
   expect(vals).toEqual([10, 2569, 1, '0041001', 1, false, 1, 10, 2569, 1, '1204101', 2, true, 1]);
 });
 test('save with an empty list clears the plan (DELETE only, no INSERT)', async () => {
-  useDb(planRules());
+  useDb(planRules(PLAN, []));
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: [] }), res);
-  expect(res.body).toEqual({ success: true, result: [] });
+  expect(res.body).toEqual({ success: true });
   expect(sqlCalls(/INSERT INTO "plan_subject"/)).toHaveLength(0);
 });
-test('BUG-PLAN-5 (current behavior): response.result is [] even though the saved subjects exist in course_detail', async () => {
+test('HTTP save replies only {success:true} and never re-reads the plan (frontend only checks success)', async () => {
   useDb(planRules(PLAN, [{ code: '0041001', sec: 1 }]));
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: [FRONT_SUBJECTS[0]] }), res);
-  expect(res.body.success).toBe(true);
-  expect(res.body.result).toEqual([]); // flat values[] passed as force_subjects_data -> s[3]/s[4] index chars of scalars
+  expect(res.body).toEqual({ success: true });
+  expect(sqlCalls(/SELECT/)).toHaveLength(1); // only the user lookup
 });
-test.todo('BUG-PLAN-5: response.result should echo the saved subjects', async () => {
+test('BUG-PLAN-5: WS save still returns result = the saved subjects', async () => {
   useDb(planRules(PLAN, [{ code: '0041001', sec: 1 }]));
-  const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: [FRONT_SUBJECTS[0]] }), res);
-  expect(res.body.result).toHaveLength(1);
+  const out = await P.updatePlanSubjectsUser(null, null, { user: USERS[7], plan_id: 10 }, { subjects: [FRONT_SUBJECTS[0]] });
+  expect(out.success).toBe(true);
+  expect(out.result).toHaveLength(1);
 });
-test('BUG-PLAN-4 (current behavior): body without "subjects" wipes the plan BEFORE failing with 400', async () => {
+test('BUG-PLAN-4: invalid body 400s WITHOUT deleting existing plan subjects', async () => {
   useDb(planRules());
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, {}), res);
   expect(res.code).toBe(400);
-  expect(sqlCalls(/DELETE FROM plan_subject/)).toHaveLength(1);
-});
-test.todo('BUG-PLAN-4: invalid body must not delete existing plan subjects (validate first / use a transaction)', async () => {
-  useDb(planRules());
-  await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, {}), mkRes());
   expect(sqlCalls(/DELETE FROM plan_subject/)).toHaveLength(0);
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all).toContain('ROLLBACK'); expect(all).not.toContain('COMMIT');
 });
-test('BUG-PLAN-6 (current behavior): placeholders are counted from the FIRST subject\'s keys, values are always 7/subject', async () => {
+test('BUG-PLAN-4: a failing INSERT is rolled back (DELETE never committed)', async () => {
   useDb(planRules());
-  // JSON.stringify drops undefined -> a subject without mute_alert arrives with 4 keys
+  const base = __db.handler;
+  __db.handler = async (t, p) => { if (/INSERT INTO "plan_subject"/.test(t)) throw { code: '23505' }; return base(t, p); };
+  const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: FRONT_SUBJECTS }), res);
+  expect(res.code).toBe(400);
+  const all = __db.calls.map((c) => c[0].trim());
+  expect(all).toContain('ROLLBACK'); expect(all).not.toContain('COMMIT');
+});
+test('BUG-PLAN-6: placeholders are always 7 per subject, matching the 7 values', async () => {
+  useDb(planRules());
   const subjects = [{ year: 2569, semester: 1, code: '0041001', sec: 1 }];
   await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects }), mkRes());
   const [ins, vals] = sqlCalls(/INSERT INTO "plan_subject"/)[0];
-  const placeholders = (ins.match(/\$\d+/g) || []).length;
-  expect(placeholders).toBe(6);
-  expect(vals).toHaveLength(7); // Postgres rejects the INSERT -> but the DELETE already ran (see BUG-PLAN-4)
+  expect((ins.match(/\$\d+/g) || []).length).toBe(7);
+  expect(vals).toHaveLength(7);
 });
 test('save on a soft-deleted plan is still accepted (no is_delete check in updatePlanSubjectsUser)', async () => {
   useDb(planRules({ ...PLAN, is_delete: true }));
@@ -284,11 +307,11 @@ test('unknown user (token for a deleted account) -> 400 "User Not Found"', async
 });
 
 // ---------- BUG-PLAN-12: duplicate (plan_id, code, sec) rows ----------
-test('BUG-PLAN-12 (current behavior): duplicate sections in the body are inserted as-is (no dedupe, plan_subject has no unique key)', async () => {
+test('BUG-PLAN-12: duplicate sections in the body are collapsed to one row (UNIQUE(plan_id, code, sec) in V2 migration)', async () => {
   useDb(planRules());
   const s = { year: 2569, semester: 1, code: '0041001', sec: 1, mute_alert: false };
   const res = mkRes(); await P.updatePlanSubjectsUser(rq(7, { plan_id: 10 }, { subjects: [s, s] }), res);
-  expect(sqlCalls(/INSERT INTO "plan_subject"/)[0][1]).toHaveLength(14);
+  expect(sqlCalls(/INSERT INTO "plan_subject"/)[0][1]).toHaveLength(7);
 });
 test('BUG-PLAN-12 (current behavior): duplicate plan_subject rows are returned N times by GET plan', async () => {
   const dup = { code: '0041001', sec: 1, mute_alert: false };
@@ -296,4 +319,3 @@ test('BUG-PLAN-12 (current behavior): duplicate plan_subject rows are returned N
   const res = mkRes(); await P.getPlanUser(rq(7, { plan_id: 10 }), res);
   expect(res.body.subjects).toHaveLength(3);
 });
-test.todo('BUG-PLAN-12: a section must appear at most once per plan (dedupe on save or UNIQUE(plan_id, code, sec))', () => {});

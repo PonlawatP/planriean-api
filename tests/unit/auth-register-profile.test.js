@@ -76,26 +76,33 @@ const putUser = async (claims, body) => {
 
 test('updateUser targets row by uid > email > auth_reg_username (msu) from token', async () => {
   await putUser({ uid: 11 }, { std_id: '64010912345' });
-  expect(__db.calls[0][0]).toContain('WHERE uid = $11'); expect(__db.calls[0][1].at(-1)).toBe(11);
-  await putUser({ email: 'e@x.test' }, {});
-  expect(__db.calls.find((c) => c[0].includes('UPDATE') && c[1].at(-1) === 'e@x.test')[0]).toContain('WHERE email = $11');
-  await putUser({ login_with: 'auth-msu', auth_reg_username: '64010912345' }, {});
-  expect(__db.calls.some((c) => c[0].includes('WHERE auth_reg_username = $11'))).toBe(true);
+  expect(__db.calls[0][0]).toContain('WHERE uid = $2'); expect(__db.calls[0][1].at(-1)).toBe(11);
+  await putUser({ email: 'e@x.test' }, { std_name: 'n' });
+  expect(__db.calls.find((c) => c[0].includes('UPDATE') && c[1].at(-1) === 'e@x.test')[0]).toContain('WHERE email = $2');
+  await putUser({ login_with: 'auth-msu', auth_reg_username: '64010912345' }, { std_name: 'n' });
+  expect(__db.calls.some((c) => c[0].includes('WHERE auth_reg_username = $2'))).toBe(true);
 });
 
 test('updateUser std_id must be exactly 11 chars, otherwise it is stored as "" (not rejected)', async () => {
   await putUser({ uid: 1 }, { std_id: '123' });
-  expect(__db.calls[0][1][3]).toBe('');
+  expect(__db.calls[0][1][0]).toBe('');
   await putUser({ uid: 1 }, { std_id: '64010912345' });
-  expect(__db.calls.filter((c) => c[0].includes('UPDATE')).at(-1)[1][3]).toBe('64010912345');
+  expect(__db.calls.filter((c) => c[0].includes('UPDATE')).at(-1)[1][0]).toBe('64010912345');
 });
 
-// BUG A-PROFILE-1: PUT /user is a FULL overwrite. Every omitted field becomes NULL and std_id becomes "".
-test.failing('BUG A-PROFILE-1: a partial PUT /user (only std_name) must NOT null-out other columns', async () => {
+// H5 / BUG-PROF-01: PUT /user only writes the columns that were sent.
+test('BUG A-PROFILE-1: a partial PUT /user (only std_name) must NOT null-out other columns', async () => {
   await putUser({ uid: 1 }, { std_name: 'Only' });
-  const p = __db.calls[0][1];
-  // expected after fix: untouched columns not sent / preserved. Current: uni_id, fac_id, cr_id, email, username, image all null
-  expect([p[0], p[1], p[2], p[7], p[8], p[9]].every((v) => v === null)).toBe(false);
+  const [sql, p] = __db.calls[0];
+  expect(sql).toContain('"std_name" = $1');
+  for (const c of ['uni_id', 'fac_id', 'cr_id', 'email', 'username', 'image', 'std_id']) expect(sql).not.toContain(`"${c}"`);
+  expect(p).toEqual(['Only', 1]);
+});
+test('avatar save sends only {image} -> only image is written', async () => {
+  await putUser({ uid: 1 }, { image: 'https://i/x.png' });
+  const [sql, p] = __db.calls[0];
+  expect(sql).toContain('"image" = $1'); expect(sql).not.toContain('"std_name"');
+  expect(p).toEqual(['https://i/x.png', 1]);
 });
 
 test('updateUser returns the refreshed user FLAT (no {user:} wrapper, unlike GET /user) with password stripped (BUG A-PROFILE-3: inconsistent shape)', async () => {

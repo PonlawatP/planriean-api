@@ -34,13 +34,15 @@ test('loginMiddleware: wrong password / unknown user / missing body all -> same 
     expect(res.body).toEqual({ message: 'Invalid Username or password' });
   }
 });
-test('loginMiddleware: MSU/Google users whose password is the literal hash of "null" can log in with password "null" (documents BUG A-AUTH-5)', async () => {
+test('loginMiddleware: password "null" is refused even when the stored hash matches it (A-AUTH-5 / H11)', async () => {
   // authFromToken registers SSO users with password "null" (login.js:41,138) -> a bcrypt hash of the string "null"
   const hash = await bcrypt.hash('null', 4);
   __db.handler = async () => ({ rows: [{ username: null, password: hash }], rowCount: 1 });
   let nexted = false;
-  await loginMiddleware({ body: { username: 'sso-user-email@x.test', password: 'null' } }, mkRes(), () => { nexted = true; });
-  expect(nexted).toBe(true);
+  const res = mkRes();
+  await loginMiddleware({ body: { username: 'sso-user-email@x.test', password: 'null' } }, res, () => { nexted = true; });
+  expect(nexted).toBe(false);
+  expect(res.code).toBe(401);
 });
 
 test('requireJWTAuth: reads SECRET_JWT at import and expects the RAW token in the authorization header (no "Bearer ")', async () => {
@@ -49,5 +51,16 @@ test('requireJWTAuth: reads SECRET_JWT at import and expects the RAW token in th
   expect(typeof requireJWTAuth).toBe('function');
   const strat = passport._strategy('jwt');
   expect(strat._jwtFromRequest({ headers: { authorization: 'abc.def' } })).toBe('abc.def');
-  expect(strat._jwtFromRequest({ headers: { authorization: 'Bearer abc.def' } })).toBe('Bearer abc.def'); // would fail signature check
+});
+
+test('normalizeAuthHeader: strips "Bearer " so passport + jwt-simple handlers accept both header styles (H11)', () => {
+  const { normalizeAuthHeader } = require('../../src/middleware/requireJWTAuth');
+  for (const [inp, out] of [['Bearer abc.def', 'abc.def'], ['bearer  abc.def', 'abc.def'], ['abc.def', 'abc.def']]) {
+    const r = { headers: { authorization: inp } };
+    normalizeAuthHeader(r, {}, () => {});
+    expect(r.headers.authorization).toBe(out);
+  }
+  const none = { headers: {} };
+  normalizeAuthHeader(none, {}, () => {});
+  expect(none.headers.authorization).toBeUndefined();
 });

@@ -156,7 +156,7 @@ const getSubjectDetail = async (req, res) => {
             });
         }
         return acc;
-    }, []).filter(term => term._year < current_seasons.year || (term._year == current_seasons.year && term._semester <= current_seasons.semester)).map(term => ({
+    }, []).filter(term => !current_seasons || term._year < current_seasons.year || (term._year == current_seasons.year && term._semester <= current_seasons.semester)).map(term => ({
         ...term,
         _year: undefined,
         _semester: undefined,

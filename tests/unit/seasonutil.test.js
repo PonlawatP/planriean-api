@@ -33,8 +33,10 @@ test('getCurrentSeason: "current" = the row BEFORE the first row whose ss_end >=
   expect(getCurrentSeason(seasons, now, true)).toEqual({ year: 2569, semester: 2 });
 });
 
-test('getCurrentSeason returns null after every season ended', () => {
-  expect(getCurrentSeason(seasons, '2027-01-01T00:00:00Z')).toBeNull();
+test('getCurrentSeason after every season ended: current = latest season, incomming = null (no throw)', () => {
+  expect(getCurrentSeason(seasons, '2027-01-01T00:00:00Z')).toEqual({ year: 2569, semester: 2 });
+  expect(getCurrentSeason(seasons, '2027-01-01T00:00:00Z', true)).toBeNull();
+  expect(getSeasonRemaining(seasons, '2027-01-01T00:00:00Z')).toEqual([]);
 });
 
 test('getSeasonRemaining includes the previous (already ended) row first, renames seamster_round->semester', () => {
@@ -44,14 +46,29 @@ test('getSeasonRemaining includes the previous (already ended) row first, rename
   expect(out[1]).toMatchObject({ year: 2569, semester: 2 });
 });
 
-// BUG A-UNI-1: when today is before the FIRST season's end, seasons[i-1] is undefined -> TypeError.
-// It bubbles up to GET /university/:id (404 "University Not Found") and GET /university/:id/... callers.
-test.skip('BUG A-UNI-1: getCurrentSeason should not throw before the first season', () => {
-  expect(() => getCurrentSeason(seasons, '2025-01-01T00:00:00Z')).not.toThrow();
+// H10: before the FIRST season ended there is no previous row.
+test('before the first season: current = null, incomming = first season, remaining = all (no throw)', () => {
+  const now = '2025-01-01T00:00:00Z';
+  expect(getCurrentSeason(seasons, now)).toBeNull();
+  expect(getCurrentSeason(seasons, now, true)).toEqual({ year: 2568, semester: 2 });
+  const rem = getSeasonRemaining(seasons, now);
+  expect(rem.map((r) => [r.year, r.semester])).toEqual([[2568, 2], [2569, 1], [2569, 2]]);
 });
-test('BUG A-UNI-1 (documented current behaviour): getCurrentSeason throws before first season', () => {
-  expect(() => getCurrentSeason(seasons, '2025-01-01T00:00:00Z')).toThrow();
-  expect(() => getSeasonRemaining(seasons, '2025-01-01T00:00:00Z')).toThrow();
+test('between seasons: current = the one just ended, incomming = the next one', () => {
+  const now = '2026-03-01T00:00:00Z';
+  expect(getCurrentSeason(seasons, now)).toEqual({ year: 2568, semester: 2 });
+  expect(getCurrentSeason(seasons, now, true)).toEqual({ year: 2569, semester: 1 });
+});
+test('empty list: everything null/empty', () => {
+  expect(getCurrentSeason([], '2026-01-01')).toBeNull();
+  expect(getCurrentSeason([], '2026-01-01', true)).toBeNull();
+  expect(getSeasonRemaining([], '2026-01-01')).toEqual([]);
+});
+test('all-NULL dates: ignored, no throw', () => {
+  const s = [{ year: 2569, seamster_round: 1, ss_start: null, ss_end: null }];
+  expect(getCurrentSeason(s, '2026-01-01')).toBeNull();
+  expect(getCurrentSeason(s, '2026-01-01', true)).toBeNull();
+  expect(getSeasonRemaining(s, '2026-01-01')).toEqual([]);
 });
 
 test('null ss_end (LEFT JOIN without rounding) is skipped as epoch', () => {

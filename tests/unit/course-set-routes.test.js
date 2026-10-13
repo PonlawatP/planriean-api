@@ -75,11 +75,7 @@ test('BUG-CS-1 (current behavior): PUT map has NO auth — an anonymous request 
   // array index -> std_year (+1), semester string -> int, header -> "h-<id>"
   expect(ins).toEqual([[5, 1, 1, '0041001', '3'], [5, 1, 1, 'h-2.1', '6']]);
 });
-test.todo('BUG-CS-1: anonymous PUT map must be rejected (401) without touching courseset_subjectplan', async () => {
-  const res = mkRes(); await CS.a_editCoursesetMapping(rq(null, { uni_id: 1, cr_id: 5 }, []), res);
-  expect(res.code).toBe(401);
-  expect(sqlCalls(/DELETE FROM courseset_subjectplan/)).toHaveLength(0);
-});
+// BUG-CS-1 / H3: anonymous + student PUT map is rejected by requireJWTAuth + requireRole('helper') -> authz-guards.test.js
 
 // ---------- GET /university/:uni_id/course-set/:cr_id (index.js:160) — header tree ----------
 test('curriculum tree: headers nest by cr_head_id_ref, sort numerically by dotted id (1.2 before 1.10), subjects attach by cr_head_id', async () => {

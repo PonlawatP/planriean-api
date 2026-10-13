@@ -95,3 +95,22 @@ test('BUG-ROLE (current behavior): calendar writes only require "logged in" — 
   const res = mkRes(); await RG.a_manageRegisterYear(rq('POST', {}, { year: 2571 }), res);
   expect(res.body.success).toBe(true);
 });
+
+// H15: PUT /semester/:oldSemester takes the semester ROUND (seamster_round), not seamster_id.
+test('PUT semester: oldSemester is matched against seamster_round and the UPDATE uses the same round', async () => {
+  useDb([[/SELECT 1 FROM seamster_detail/, (s, p) => (p[2] === '1' ? [{ '?column?': 1 }] : [])]]);
+  const res = mkRes(); await RG.a_manageRegisterSemester(rq('PUT', { year: 2569, oldSemester: '1' }, { semester: 2 }), res);
+  expect(res.body.success).toBe(true);
+  expect(sqlCalls(/UPDATE seamster_detail/)[0][1]).toEqual([2, 1, 2569, '1']);
+});
+test('PUT semester: a seamster_id (e.g. 41) is not a round -> "not found", no UPDATE', async () => {
+  useDb([[/SELECT 1 FROM seamster_detail/, (s, p) => (p[2] === '1' ? [{ '?column?': 1 }] : [])]]);
+  const res = mkRes(); await RG.a_manageRegisterSemester(rq('PUT', { year: 2569, oldSemester: '41' }, { semester: 2 }), res);
+  expect(res.body.success).toBe(false);
+  expect(sqlCalls(/UPDATE seamster_detail/).length).toBe(0);
+});
+test('unsupported method on timeline -> 405 with success:false', async () => {
+  const res = mkRes(); await RG.a_manageRegisterTimeline(rq('PATCH', { year: 2569, semester: 1 }, {}), res);
+  expect(res.code).toBe(405);
+  expect(res.body.success).toBe(false);
+});

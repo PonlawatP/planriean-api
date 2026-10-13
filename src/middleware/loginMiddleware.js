@@ -8,6 +8,10 @@ const loginMiddleware = async (req, res, next) => {
   try {
     const user = req.body.username;
     const password = req.body.password;
+    // SSO-created accounts used to be stored with password 'null' (no real credential): never accept it.
+    if (!password || password === "null") {
+      return res.status(401).json({ message: "Invalid Username or password" });
+    }
     const result = await db.query(
       "SELECT * FROM user_detail WHERE lower(username) = lower($1) OR lower(email) = lower($2)",
       [user, user]

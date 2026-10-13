@@ -7,12 +7,15 @@ import { test, expect } from 'bun:test';
 const { Elysia } = require('elysia');
 
 async function sameSignatureAsElysiaServer(context, parameter = null, data = null) { return { body: context.body ?? null }; }
+// the fixed shape now used by elysia-server.js (elysiaGetCoursesSpecific / elysiaGetPlanSubjectSeats)
+async function fixedSignature(context) { const parameter = null, data = null; return { body: (data || context.body) ?? null }; }
 async function singleParam(context) { return { body: context.body ?? null }; }
 async function destructured({ body }) { return { body: body ?? null }; }
 
 const app = new Elysia()
   .post('/server-signature', sameSignatureAsElysiaServer)
   .post('/single-param', singleParam)
+  .post('/fixed', fixedSignature)
   .post('/destructured', destructured);
 // app.handle() (no port, no global fetch — another test file stubs globalThis.fetch)
 const post = async (path) => (await app.handle(new Request(`http://localhost${path}`, {
@@ -27,6 +30,6 @@ test('control: a single-param or destructured handler receives the parsed body',
   expect((await post('/single-param')).body).toEqual({ subjects: [{ code: '0041001', sec: 1 }] });
   expect((await post('/destructured')).body).toEqual({ subjects: [{ code: '0041001', sec: 1 }] });
 });
-test.todo('BUG-COURSE-1: the handler shape used by elysia-server.js must receive the parsed body', async () => {
-  expect((await post('/server-signature')).body).toEqual({ subjects: [{ code: '0041001', sec: 1 }] });
+test('H8: the fixed handler shape used by elysia-server.js receives the parsed body', async () => {
+  expect((await post('/fixed')).body).toEqual({ subjects: [{ code: '0041001', sec: 1 }] });
 });

@@ -50,48 +50,31 @@ function semesterYearGroupData(data) {
 
   return Object.values(grouped).sort((a, b) => b.year - a.year);
 }
+// Rows without ss_end (LEFT JOIN with no rounding) have no usable date: ignore them.
+const dated = (seasons) => seasons.filter((s) => s.ss_end != null);
+const pick = (s) => (s ? { year: s.year, semester: s.seamster_round } : null);
+
+// current   = the last season that has already ended (null before the first one)
+// incomming = the first season whose ss_end is still ahead (null once all have ended)
 function getCurrentSeason(seasons, currentDate, incomming = false) {
-  let currentDateTime = new Date(currentDate);
+  const rows = dated(seasons);
+  const now = new Date(currentDate);
+  const i = rows.findIndex((s) => now <= new Date(s.ss_end));
 
-  for (let i = 0; i < seasons.length; i++) {
-    const season = seasons[i];
-    const start = new Date(season.ss_start);
-    const end = new Date(season.ss_end);
-
-    // console.log(season, currentDateTime <= end);
-    if (currentDateTime <= end) {
-      const current = seasons[incomming ? i : i - 1];
-      return {
-        year: current.year,
-        semester: current.seamster_round,
-      };
-    }
-  }
-
-  return null; // Return null if no matching season is found
+  if (incomming) return i === -1 ? null : pick(rows[i]);
+  if (i === -1) return pick(rows[rows.length - 1]); // all ended -> latest one is current
+  return i === 0 ? null : pick(rows[i - 1]);
 }
 
 function getSeasonRemaining(seasons, currentDate) {
-  let currentDateTime = new Date(currentDate);
+  const rows = dated(seasons);
+  const now = new Date(currentDate);
+  const i = rows.findIndex((s) => now <= new Date(s.ss_end));
+  if (i === -1) return [];
 
-  const res = []
-  let is_found = false;
-  for (let i = 0; i < seasons.length; i++) {
-    const season = seasons[i];
-    // const start = new Date(season.ss_start);
-    const end = new Date(season.ss_end);
-
-    // console.log(season, currentDateTime <= end);
-    if (currentDateTime <= end) {
-      if (!is_found) {
-        is_found = true;
-        res.push({ ...seasons[i - 1], seamster_round: undefined, semester: seasons[i - 1].seamster_round })
-      }
-      res.push({ ...seasons[i], seamster_round: undefined, semester: seasons[i].seamster_round })
-    }
-  }
-
-  return res;
+  // include the previous (already ended) row first when there is one
+  const ahead = rows.filter((s) => now <= new Date(s.ss_end));
+  return (i === 0 ? ahead : [rows[i - 1], ...ahead]).map((s) => ({ ...s, seamster_round: undefined, semester: s.seamster_round }));
 }
 
 module.exports = { semesterRoundGroupData, semesterYearGroupData, getCurrentSeason, getSeasonRemaining };

@@ -22,7 +22,8 @@ const {
   changePassword,
 } = require("./routes/auth/login");
 const { loginMiddleware } = require("./middleware/loginMiddleware");
-const { requireJWTAuth } = require("./middleware/requireJWTAuth");
+const { requireJWTAuth, normalizeAuthHeader } = require("./middleware/requireJWTAuth");
+const { requireRole, requireRestrictGroupRole, requireCourseSetRole } = require("./middleware/requireRole");
 const {
   registerUser,
   updateUser,
@@ -113,9 +114,11 @@ const corsOptions = {
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
   optionsSuccessStatus: 204,
+  maxAge: 86400, // let browsers cache the preflight instead of sending OPTIONS before every plan save
 };
 
 app.use(cors(corsOptions));
+app.use(normalizeAuthHeader);
 if (devlog.enabled) app.use(devlog.expressLogger);
 
 app.use(express.json());
@@ -136,7 +139,7 @@ app.get("/user", requireJWTAuth, authGetUser);
 app.get("/user/history", requireJWTAuth, getUserSubjectHistory);
 app.put("/user/history", requireJWTAuth, updateUserSubjectHistory);
 app.put("/user", requireJWTAuth, updateUser);
-app.put("/user/update/fs", updateFSUser);
+app.put("/user/update/fs", requireJWTAuth, updateFSUser);
 
 app.get("/plan", requireJWTAuth, getListPlanUser);
 app.post("/plan/create", requireJWTAuth, createPlanUser);
@@ -170,189 +173,78 @@ app.get("/university/:uni_id/season", getUniversitySeasons);
 
 /** admin section */
 // users
-app.get("/university/:uni_id/user", requireJWTAuth, getAllUsers);
-app.post("/university/:param_uni_id/user/:uid", requireJWTAuth, a_addUserRole);
-app.put("/university/:param_uni_id/user/:uid", requireJWTAuth, a_editUserRole);
-app.delete(
-  "/university/:param_uni_id/user/:uid",
-  requireJWTAuth,
-  a_deleteUserRole
-);
+app.get("/university/:uni_id/user", requireJWTAuth, requireRole("helper"), getAllUsers);
+app.post("/university/:param_uni_id/user/:uid", requireJWTAuth, requireRole("moderator"), a_addUserRole);
+app.put("/university/:param_uni_id/user/:uid", requireJWTAuth, requireRole("moderator"), a_editUserRole);
+app.delete("/university/:param_uni_id/user/:uid", requireJWTAuth, requireRole("moderator"), a_deleteUserRole);
 // university
-app.post("/university", requireJWTAuth, addUniversityDetail);
-app.put("/university/:uni_id", requireJWTAuth, editUniversityDetail);
-app.delete("/university/:uni_id", requireJWTAuth, removeUniversityDetail);
+app.post("/university", requireJWTAuth, requireRole("admin", "global"), addUniversityDetail);
+app.put("/university/:uni_id", requireJWTAuth, requireRole("admin"), editUniversityDetail);
+app.delete("/university/:uni_id", requireJWTAuth, requireRole("admin"), removeUniversityDetail);
 // faculty
-app.post("/university/:uni_id/faculty", requireJWTAuth, addFacultyDetail);
-app.put(
-  "/university/:uni_id/faculty/:fac_id",
-  requireJWTAuth,
-  editFacultyDetail
-);
-app.delete(
-  "/university/:uni_id/faculty/:fac_id",
-  requireJWTAuth,
-  removeFacultyDetail
-);
+app.post("/university/:uni_id/faculty", requireJWTAuth, requireRole("admin"), addFacultyDetail);
+app.put("/university/:uni_id/faculty/:fac_id", requireJWTAuth, requireRole("admin"), editFacultyDetail);
+app.delete("/university/:uni_id/faculty/:fac_id", requireJWTAuth, requireRole("admin"), removeFacultyDetail);
 // course-set group
-app.post(
-  "/university/:uni_id/course-set-group",
-  requireJWTAuth,
-  a_addCoursesetGroupDetail
-);
-app.put(
-  "/university/:uni_id/course-set-group/:cr_group_id",
-  requireJWTAuth,
-  a_editCourseSetGroupDetail
-);
-app.delete(
-  "/university/:uni_id/course-set-group/:cr_group_id",
-  requireJWTAuth,
-  a_removeCoursesetGroupDetail
-);
+app.post("/university/:uni_id/course-set-group", requireJWTAuth, requireRole("admin"), a_addCoursesetGroupDetail);
+app.put("/university/:uni_id/course-set-group/:cr_group_id", requireJWTAuth, requireRole("admin"), a_editCourseSetGroupDetail);
+app.delete("/university/:uni_id/course-set-group/:cr_group_id", requireJWTAuth, requireRole("admin"), a_removeCoursesetGroupDetail);
 // course-set detail
-app.post(
-  "/university/:uni_id/course-set",
-  requireJWTAuth,
-  a_addCoursesetDetail
-);
-app.put(
-  "/university/:uni_id/course-set/:cr_id",
-  requireJWTAuth,
-  a_editCoursesetDetail
-);
-app.delete(
-  "/university/:uni_id/course-set/:cr_id",
-  requireJWTAuth,
-  a_removeCoursesetDetail
-);
+app.post("/university/:uni_id/course-set", requireJWTAuth, requireCourseSetRole("helper"), a_addCoursesetDetail);
+app.put("/university/:uni_id/course-set/:cr_id", requireJWTAuth, requireCourseSetRole("helper"), a_editCoursesetDetail);
+app.delete("/university/:uni_id/course-set/:cr_id", requireJWTAuth, requireCourseSetRole("helper"), a_removeCoursesetDetail);
 // course-set header
-app.post(
-  "/university/:uni_id/course-set/:cr_id/header",
-  requireJWTAuth,
-  a_addCoursesetHeader
-);
-app.put(
-  "/university/:uni_id/course-set/:cr_id/header/:cr_head_id",
-  requireJWTAuth,
-  a_editCoursesetHeader
-);
-app.delete(
-  "/university/:uni_id/course-set/:cr_id/header/:cr_head_id",
-  requireJWTAuth,
-  a_removeCoursesetHeader
-);
+app.post("/university/:uni_id/course-set/:cr_id/header", requireJWTAuth, requireCourseSetRole("helper"), a_addCoursesetHeader);
+app.put("/university/:uni_id/course-set/:cr_id/header/:cr_head_id", requireJWTAuth, requireCourseSetRole("helper"), a_editCoursesetHeader);
+app.delete("/university/:uni_id/course-set/:cr_id/header/:cr_head_id", requireJWTAuth, requireCourseSetRole("helper"), a_removeCoursesetHeader);
 // course-set course - subjects in course_set
-app.post(
-  "/university/:uni_id/course-set/:cr_id/course",
-  requireJWTAuth,
-  a_addCoursesetSubject
-);
-app.put(
-  "/university/:uni_id/course-set/:cr_id/course/:suj_id",
-  requireJWTAuth,
-  a_editCoursesetSubject
-);
-app.delete(
-  "/university/:uni_id/course-set/:cr_id/course/:suj_id",
-  requireJWTAuth,
-  a_removeCoursesetSubject
-);
+app.post("/university/:uni_id/course-set/:cr_id/course", requireJWTAuth, requireCourseSetRole("helper"), a_addCoursesetSubject);
+app.put("/university/:uni_id/course-set/:cr_id/course/:suj_id", requireJWTAuth, requireCourseSetRole("helper"), a_editCoursesetSubject);
+app.delete("/university/:uni_id/course-set/:cr_id/course/:suj_id", requireJWTAuth, requireCourseSetRole("helper"), a_removeCoursesetSubject);
 
 // course-set mapping
-app.put("/university/:uni_id/course-set/:cr_id/map", a_editCoursesetMapping);
+app.put("/university/:uni_id/course-set/:cr_id/map", requireJWTAuth, requireCourseSetRole("helper"), a_editCoursesetMapping);
 
 // course-set restricted
 app.get("/university/:uni_id/restrict", getCourseRestrictGroups);
-app.post("/university/:uni_id/restrict", a_addCourseRestrictGroup);
-app.put(
-  "/university/:uni_id/restrict/:cr_restgrp_id",
-  a_editCourseRestrictGroup
-);
-app.delete(
-  "/university/:uni_id/restrict/:cr_restgrp_id",
-  a_removeCourseRestrictGroup
-);
+app.post("/university/:uni_id/restrict", requireJWTAuth, requireRole("helper"), a_addCourseRestrictGroup);
+app.put("/university/:uni_id/restrict/:cr_restgrp_id", requireJWTAuth, requireRestrictGroupRole("helper"), a_editCourseRestrictGroup);
+app.delete("/university/:uni_id/restrict/:cr_restgrp_id", requireJWTAuth, requireRestrictGroupRole("helper"), a_removeCourseRestrictGroup);
 app.get(
   "/university/:uni_id/restrict/:cr_restgrp_id",
   getCourseRestrictGroupData
 );
-app.post(
-  "/university/:uni_id/restrict/:cr_restgrp_id/user",
-  a_addCourseRestrictGroupUsers
-);
-app.delete(
-  "/university/:uni_id/restrict/:cr_restgrp_id/user",
-  a_removeCourseRestrictGroupUsers
-);
-app.put(
-  "/university/:uni_id/restrict/:cr_restgrp_id/user",
-  a_updateCourseRestrictGroupUsers
-);
-app.post(
-  "/university/:uni_id/restrict/:cr_restgrp_id/subject",
-  a_addCourseRestrictGroupSubjects
-);
-app.delete(
-  "/university/:uni_id/restrict/:cr_restgrp_id/subject",
-  a_removeCourseRestrictGroupSubjects
-);
-app.put(
-  "/university/:uni_id/restrict/:cr_restgrp_id/subject",
-  a_updateCourseRestrictGroupSubjects
-);
+app.post("/university/:uni_id/restrict/:cr_restgrp_id/user", requireJWTAuth, requireRestrictGroupRole("helper"), a_addCourseRestrictGroupUsers);
+app.delete("/university/:uni_id/restrict/:cr_restgrp_id/user", requireJWTAuth, requireRestrictGroupRole("helper"), a_removeCourseRestrictGroupUsers);
+app.put("/university/:uni_id/restrict/:cr_restgrp_id/user", requireJWTAuth, requireRestrictGroupRole("helper"), a_updateCourseRestrictGroupUsers);
+app.post("/university/:uni_id/restrict/:cr_restgrp_id/subject", requireJWTAuth, requireRestrictGroupRole("helper"), a_addCourseRestrictGroupSubjects);
+app.delete("/university/:uni_id/restrict/:cr_restgrp_id/subject", requireJWTAuth, requireRestrictGroupRole("helper"), a_removeCourseRestrictGroupSubjects);
+app.put("/university/:uni_id/restrict/:cr_restgrp_id/subject", requireJWTAuth, requireRestrictGroupRole("helper"), a_updateCourseRestrictGroupSubjects);
 
 // get university register intervals
 app.get("/university/:uni_id/register", getRegisterIntevals);
 // university register intervals - year
-app.post("/university/:uni_id/register/year", a_manageRegisterYear);
-app.put("/university/:uni_id/register/year/:oldYear", a_manageRegisterYear);
-app.delete("/university/:uni_id/register/year/:oldYear", a_manageRegisterYear);
+app.post("/university/:uni_id/register/year", requireJWTAuth, requireRole("admin"), a_manageRegisterYear);
+app.put("/university/:uni_id/register/year/:oldYear", requireJWTAuth, requireRole("admin"), a_manageRegisterYear);
+app.delete("/university/:uni_id/register/year/:oldYear", requireJWTAuth, requireRole("admin"), a_manageRegisterYear);
 // university register intervals - semester
-app.post(
-  "/university/:uni_id/register/year/:year/semester",
-  a_manageRegisterSemester
-);
-app.put(
-  "/university/:uni_id/register/year/:year/semester/:oldSemester",
-  a_manageRegisterSemester
-);
-app.delete(
-  "/university/:uni_id/register/year/:year/semester/:semester",
-  a_manageRegisterSemester
-);
+app.post("/university/:uni_id/register/year/:year/semester", requireJWTAuth, requireRole("admin"), a_manageRegisterSemester);
+app.put("/university/:uni_id/register/year/:year/semester/:oldSemester", requireJWTAuth, requireRole("admin"), a_manageRegisterSemester);
+app.delete("/university/:uni_id/register/year/:year/semester/:semester", requireJWTAuth, requireRole("admin"), a_manageRegisterSemester);
 // university register intervals - timeline
-app.post(
-  "/university/:uni_id/register/year/:year/semester/:semester/timeline",
-  a_manageRegisterTimeline
-);
-app.put(
-  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:oldTimeline",
-  a_manageRegisterTimeline
-);
-app.delete(
-  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline",
-  a_manageRegisterTimeline
-);
+app.post("/university/:uni_id/register/year/:year/semester/:semester/timeline", requireJWTAuth, requireRole("admin"), a_manageRegisterTimeline);
+app.put("/university/:uni_id/register/year/:year/semester/:semester/timeline/:oldTimeline", requireJWTAuth, requireRole("admin"), a_manageRegisterTimeline);
+app.delete("/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline", requireJWTAuth, requireRole("admin"), a_manageRegisterTimeline);
 // university register intervals - sub-timeline
-app.post(
-  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub",
-  a_manageRegisterSubTimeline
-);
-app.put(
-  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:oldSub",
-  a_manageRegisterSubTimeline
-);
-app.delete(
-  "/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:sub",
-  a_manageRegisterSubTimeline
-);
+app.post("/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub", requireJWTAuth, requireRole("admin"), a_manageRegisterSubTimeline);
+app.put("/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:oldSub", requireJWTAuth, requireRole("admin"), a_manageRegisterSubTimeline);
+app.delete("/university/:uni_id/register/year/:year/semester/:semester/timeline/:timeline/sub/:sub", requireJWTAuth, requireRole("admin"), a_manageRegisterSubTimeline);
 
 // plan restricted
 app.get("/plan-restrict/view/:restgrp_id", requireJWTAuth, getPlanRestricted);
-app.put("/plan-restrict/view/:restgrp_id", requireJWTAuth, updatePlanRestricted);
+app.put("/plan-restrict/view/:restgrp_id", requireJWTAuth, requireRestrictGroupRole("helper"), updatePlanRestricted);
 app.get("/plan-restrict/view/:restgrp_id/subject", requireJWTAuth, getPlanSubjectsRestricted);
-app.put("/plan-restrict/view/:restgrp_id/subject", requireJWTAuth, updatePlanSubjectsRestricted);
+app.put("/plan-restrict/view/:restgrp_id/subject", requireJWTAuth, requireRestrictGroupRole("helper"), updatePlanSubjectsRestricted);
 
 /** end admin section */
 

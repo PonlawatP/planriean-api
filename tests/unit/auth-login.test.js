@@ -93,7 +93,7 @@ test('forgetPassword: unknown email -> 404 and no OTP written', async () => {
 });
 
 // BUG A-AUTH-1: no attempt counter / rate limit on verify-otp & change-password. 6-digit OTP, 3 min (1 h after verify).
-test.todo('BUG A-AUTH-1: verify-otp/change-password must lock after N failed attempts');
+// A-AUTH-1 / H11: OTP attempt lockout -> authz-guards.test.js
 // BUG A-AUTH-4: forgetPassword/verifyOTP/changePassword have no try/catch -> a DB error becomes an Express 500 HTML page
 test('forgetPassword propagates db errors (no try/catch) (documents BUG A-AUTH-4)', async () => {
   __db.handler = async () => { throw new Error('boom'); };

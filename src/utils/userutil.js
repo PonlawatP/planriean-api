@@ -22,7 +22,7 @@ async function getUser(username, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -67,7 +67,7 @@ async function getUserFromToken(token, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -75,30 +75,37 @@ async function getUserFromToken(token, show_passwd = false) {
     return null;
   }
 }
+// Just the user_detail row behind the request's JWT (1 query) — for hot paths that only need identity, not roles/plan count.
+async function getUserRowFromRequest(req) {
+  const jwt_dc = jwt.decode(
+    req.headers["authorization"],
+    process.env.SECRET_JWT
+  );
+
+  let result;
+
+  if (jwt_dc?.login_with == "auth-msu") {
+    result = await db.query(
+      "SELECT * FROM user_detail WHERE auth_reg_username = $1",
+      [jwt_dc.auth_reg_username]
+    );
+  } else {
+    result = await db.query(
+      `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : jwt_dc.sub != null ? 'username' : 'email'} = ${jwt_dc.uid != null ? '$1' : jwt_dc.sub != null ? '$1' : 'LOWER($1)'}`,
+      [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.sub != null ? jwt_dc.sub : jwt_dc.email]
+    );
+  }
+
+  return result.rows[0] || null;
+}
+
 async function getUserFromRequest(req, show_passwd = false) {
   try {
-    const jwt_dc = jwt.decode(
-      req.headers["authorization"],
-      process.env.SECRET_JWT
-    );
-
-    let result;
-
-    if (jwt_dc?.login_with == "auth-msu") {
-      result = await db.query(
-        "SELECT * FROM user_detail WHERE auth_reg_username = $1",
-        [jwt_dc.auth_reg_username]
-      );
-    } else {
-      result = await db.query(
-        `SELECT * FROM user_detail WHERE ${jwt_dc.uid != null ? 'uid' : jwt_dc.sub != null ? 'username' : 'email'} = ${jwt_dc.uid != null ? '$1' : jwt_dc.sub != null ? '$1' : 'LOWER($1)'}`,
-        [jwt_dc.uid != null ? jwt_dc.uid : jwt_dc.sub != null ? jwt_dc.sub : jwt_dc.email]
-      );
-    }
-
-    if (result.rows.length == 0) {
+    const user = await getUserRowFromRequest(req);
+    if (user == null) {
       return null;
     }
+    const result = { rows: [user] };
 
     const roles = await getUserRoles(result.rows[0]);
 
@@ -111,7 +118,7 @@ async function getUserFromRequest(req, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -139,7 +146,7 @@ async function getUserFromUID(uid, show_passwd = false) {
       ? { ...result.rows[0], plan_created: plancount.rows[0].count, roles }
       : {
         ...result.rows[0],
-        password: undefined,
+        password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
         plan_created: plancount.rows[0].count,
         roles,
       };
@@ -174,6 +181,12 @@ async function getUserRoles(user) {
     for (let index = 0; index < result.rows.length; index++) {
       const sts = result.rows[index];
 
+      // the role's own university (not the user's home one) - authorization scoping depends on this
+      const role_uni_res = sts.uni_id != null ? await db.query(
+        "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
+        [sts.uni_id]
+      ) : null;
+
       const fac_res = await db.query(
         "SELECT fac_id, fac_key, fac_name_th, fac_name_en FROM university_faculty WHERE uni_id = $1 AND fac_id = $2",
         [sts.uni_id, sts.fac_id]
@@ -191,7 +204,7 @@ async function getUserRoles(user) {
 
       res.push({
         role: sts.role,
-        university: sts.uni_id != null ? { ...uni_res.rows[0] } : null,
+        university: sts.uni_id != null ? { ...role_uni_res.rows[0] } : null,
         faculty: sts.fac_id != null ? { ...fac_res.rows[0] } : null,
         major: sts.major_id != null ? { ...courseset_res.rows[0] } : null,
       });
@@ -352,7 +365,7 @@ async function getUsers(
 
     res.push({
       ...user,
-      password: undefined,
+      password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined,
       match_role: undefined,
       uni_id: undefined,
       fac_id: undefined,
@@ -388,7 +401,7 @@ async function getUserFromUsername(user) {
     [user, user]
   );
   if (result.rows.length > 0) {
-    let user_nopass = { ...result.rows[0], password: undefined };
+    let user_nopass = { ...result.rows[0], password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined };
 
     const uni_res = await db.query(
       "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
@@ -444,7 +457,7 @@ async function getUserFromGoogle(email) {
     email,
   ]);
   if (result.rows.length > 0) {
-    let user_nopass = { ...result.rows[0], password: undefined };
+    let user_nopass = { ...result.rows[0], password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined };
 
     const uni_res = await db.query(
       "SELECT uni_key, uni_name_en, uni_name_th, uni_logo, uni_id FROM university_detail WHERE uni_id = $1",
@@ -501,7 +514,7 @@ async function getUserFromAuthMSU(student_id) {
   ]);
 
   if (result.rows.length > 0) {
-    let user_nopass = { ...result.rows[0], password: undefined };
+    let user_nopass = { ...result.rows[0], password: undefined, otp: undefined, otp_expires_at: undefined, otp_created_at: undefined };
 
     // Check if std_id matches student_id and update if necessary
     if (user_nopass.std_id !== student_id) {
@@ -574,6 +587,7 @@ module.exports = {
   getUsers,
   getUser,
   getUserFromRequest,
+  getUserRowFromRequest,
   getUserFromToken,
   getUserFromUID,
   getUserRoles,

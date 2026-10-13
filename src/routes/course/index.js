@@ -1,4 +1,5 @@
 const db = require("../../db");
+const { withSeatNames } = require("../../utils/seatutil");
 
 const Redis = require('ioredis');
 const redis = new Redis({
@@ -26,8 +27,7 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 const COURSE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 let subjectCache = null;
 let lastCacheTime = null;
-let courseCache = null;
-let lastCourseCacheTime = null;
+const courseCache = new Map(); // key `${uni_id}:${year}:${semester}` -> { rows, at }
 
 async function getSubjects() {
   // Check if cache exists and is still valid
@@ -50,8 +50,10 @@ async function getSubjects() {
 }
 async function getCoursesData(data) {
   // Check if cache exists and is still valid
-  if (courseCache && lastCourseCacheTime && (Date.now() - lastCourseCacheTime < COURSE_CACHE_DURATION)) {
-    return courseCache;
+  const cacheKey = data.join(':'); // data = [uni_id, year, semester]
+  const hit = courseCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < COURSE_CACHE_DURATION) {
+    return hit.rows;
   }
 
   // If no cache or expired, run the query
@@ -68,8 +70,6 @@ async function getCoursesData(data) {
     course_detail.sec,
     course_detail.exam_mid,
     course_detail.exam_final,
-    course_detail.exam_mid_override,
-    course_detail.exam_final_override,
     course_detail.cr_id,
     course_detail.suj_real_code
   FROM
@@ -81,10 +81,9 @@ async function getCoursesData(data) {
   )
 
   // Store in cache
-  courseCache = result.rows;
-  lastCourseCacheTime = Date.now();
+  courseCache.set(cacheKey, { rows: result.rows, at: Date.now() });
 
-  return courseCache;
+  return result.rows;
 }
 
 async function getCourses(req, res) {
@@ -101,6 +100,8 @@ async function getCourses(req, res) {
 // let lastDataUpdatedCacheTime = null;
 
 async function getCoursesSpecific(req, res, parameter = null, data = null) {
+  // Express calls handlers as (req, res, next): a function in the 3rd slot is `next`, not search params (H8)
+  if (typeof parameter === "function") parameter = null;
   try {
     const { uni_id = 1, year, semester } = parameter || req.params;
     let searchData = data || req.body;
@@ -164,9 +165,9 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
       const cachedData = await redis.get(searchData_);
       if (cachedData) {
         if (parameter != null || data != null) {
-          return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData) };
+          return { cached: true, updated: data_updated, subjects: JSON.parse(cachedData).map(withSeatNames) };
         }
-        return res.json({ cached: true, updated: data_updated, subjects: JSON.parse(cachedData) });
+        return res.json({ cached: true, updated: data_updated, subjects: JSON.parse(cachedData).map(withSeatNames) });
       }
     }
 
@@ -228,7 +229,7 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
       return matchingCourse ? {
         ...row,
         name_th: subjectsMap[row.suj_real_code] || null,
-        ...matchingCourse
+        ...withSeatNames(matchingCourse)
       } : null;
     }).filter(r => r != null);
     // console.timeEnd('map');
@@ -246,7 +247,7 @@ async function getCoursesSpecific(req, res, parameter = null, data = null) {
         return (
           // (searchData.code.includes(item.code) ||
           //   searchData.code.length == 0) &&
-          (searchData.date.includes(item.time.substring(0, 2)) ||
+          (item.time.split(";").some((m) => searchData.date.includes(m.trim().substring(0, 2))) ||
             searchData.date.length == 0) &&
           // if has more than 1 day it will check iterable
           (item.time.split(";").filter((fitem) => {

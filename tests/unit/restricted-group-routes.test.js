@@ -3,7 +3,13 @@
 import { test, expect, mock, beforeEach } from 'bun:test';
 process.env.SECRET_JWT = 'test-secret-placeholder';
 globalThis.__db ??= { handler: async () => ({ rows: [], rowCount: 0 }), calls: [] };
-mock.module('../../src/db', () => ({ query: async (t, p) => { __db.calls.push([t, p]); return __db.handler(t, p); } }));
+// calls = [sql, params, clientId]; 'pool' = db.query (any pooled connection), 'c1'.. = a checked-out client
+let __cid = 0;
+const mkClient = () => { const id = `c${++__cid}`; return { id, released: 0, query: async (t, p) => { __db.calls.push([t, p, id]); return __db.handler(t, p); }, release() { this.released++; } }; };
+mock.module('../../src/db', () => ({
+  query: async (t, p) => { __db.calls.push([t, p, 'pool']); return __db.handler(t, p); },
+  connect: async () => (__db.clients.push(mkClient()), __db.clients.at(-1)),
+}));
 const jwt = require('jwt-simple');
 const R = require('../../src/routes/restricted-group');
 
@@ -20,7 +26,7 @@ function useDb(rules = []) {
 const mkRes = () => { const r = { code: 200, body: undefined, status(c) { r.code = c; return r; }, json(b) { r.body = b; return r; }, send(b) { r.body = b; return r; } }; return r; };
 const rq = (uid, params = {}, body = {}, query = {}) => ({ headers: uid == null ? {} : { authorization: jwt.encode({ uid }, process.env.SECRET_JWT) }, params: { uni_id: 1, ...params }, body, query });
 const sqlCalls = (re) => __db.calls.filter((c) => re.test(c[0]));
-beforeEach(() => { __db.calls = []; useDb(); });
+beforeEach(() => { __db.calls = []; __db.clients = []; __cid = 0; useDb(); });
 
 test('list: anonymous -> 404 text; ?cr_id filters by curriculum, empty ?cr_id= means all', async () => {
   let res = mkRes(); await R.getCourseRestrictGroups(rq(null), res);
@@ -47,15 +53,30 @@ test('BUG-ROLE (current behavior): a plain "user" role can create a restricted g
   expect(res.code).toBe(201);
   expect(sqlCalls(/INSERT INTO courseset_restrictgrp/)[0][1]).toEqual([1, 5, undefined, 'กลุ่ม', 2569, 1]);
 });
-test.todo('BUG-ROLE: creating a restricted group must require an admin/moderator role (403 for plain users)', async () => {
-  const res = mkRes(); await R.a_addCourseRestrictGroup(rq(7, {}, { cr_id: 5 }), res);
-  expect(res.code).toBe(403);
-});
-test('BUG-RG-1 (current behavior): "transactions" are BEGIN/COMMIT sent through the shared pool helper db.query (each call may use a different pooled connection)', async () => {
+// BUG-ROLE for restricted groups is now enforced in routing (requireRole / requireRestrictGroupRole in index.js); see plan-restrict-routes.test.js
+test('BUG-RG-1 fixed: BEGIN, statements and COMMIT all go through the SAME checked-out client, released after', async () => {
   useDb([[/DELETE FROM courseset_restrictgrp/, [{}]]]);
   await R.a_removeCourseRestrictGroup(rq(7, { cr_restgrp_id: 41 }), mkRes());
-  const seq = __db.calls.map((c) => c[0].trim().split(/\s+/).slice(0, 3).join(' ')).filter((s) => /^(BEGIN|COMMIT|ROLLBACK|DELETE)/.test(s));
-  expect(seq).toEqual(['BEGIN', 'DELETE FROM restrictgrp_user', 'DELETE FROM restrictgrp_subject', 'DELETE FROM courseset_restrictgrp', 'COMMIT']);
+  const tx = __db.calls.filter((c) => /^(BEGIN|COMMIT|ROLLBACK|DELETE)/.test(c[0].trim()));
+  expect(tx.map((c) => c[0].trim().split(/\s+/).slice(0, 3).join(' '))).toEqual(['BEGIN', 'DELETE FROM restrictgrp_user', 'DELETE FROM restrictgrp_subject', 'DELETE FROM courseset_restrictgrp', 'COMMIT']);
+  expect(new Set(tx.map((c) => c[2]))).toEqual(new Set(['c1']));
+  expect(__db.clients[0].released).toBe(1);
+});
+test('BUG-RG-1 fixed: an error mid-transaction ROLLBACKs on the same client, 500, and still releases', async () => {
+  useDb([[/DELETE FROM restrictgrp_subject/, () => { throw new Error('boom'); }]]);
+  const res = mkRes(); await R.a_removeCourseRestrictGroup(rq(7, { cr_restgrp_id: 41 }), res);
+  expect(res.code).toBe(500);
+  const rb = sqlCalls(/^ROLLBACK$/);
+  expect(rb).toHaveLength(1);
+  expect(rb[0][2]).toBe('c1');
+  expect(sqlCalls(/^COMMIT$/)).toHaveLength(0);
+  expect(__db.clients[0].released).toBe(1);
+});
+test('add users: duplicate rolls back on the same client as BEGIN and releases', async () => {
+  useDb([[/SELECT \* FROM restrictgrp_user/, [{}]]]);
+  await R.a_addCourseRestrictGroupUsers(rq(7, { cr_restgrp_id: 41 }, { users: ['dup'] }), mkRes());
+  expect(sqlCalls(/^(BEGIN|ROLLBACK)$/).map((c) => c[2])).toEqual(['c1', 'c1']);
+  expect(__db.clients[0].released).toBe(1);
 });
 test('add users: an already-present std_id aborts the whole batch with 500 (not 409)', async () => {
   useDb([[/SELECT \* FROM restrictgrp_user/, (s, p) => rs(p[1] === 'dup' ? [{}] : [])]]);

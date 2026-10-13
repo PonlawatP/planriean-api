@@ -47,7 +47,7 @@ test('helper role needs uni+faculty, moderator needs uni (403 with message)', as
   expect(res.body.message).toBe('Please insert university and Faculty.');
   res = mkRes();
   await a_addUserRole(req(1, { uid: 2 }, { role: 'moderator' }), res);
-  expect(res.body.message).toBe('Please insert university.');
+  expect(res.code).toBe(403); // moderator may not grant moderator (equal rank)
 });
 
 test('uni-scoped moderator cannot add a role for ANOTHER university -> 403', async () => {
@@ -66,7 +66,7 @@ test('duplicate role -> 406', async () => {
 
 // BUG A-ROLE-1 (privilege escalation): roleGrant compares the actor against the TARGET's current role, never
 // against the role being granted. A moderator can therefore mint an "admin" for a plain user of their university.
-test.failing('BUG A-ROLE-1: moderator must NOT be able to grant role "admin"', async () => {
+test('H2 A-ROLE-1: moderator must NOT be able to grant role "admin"', async () => {
   world({ 1: { uni_id: 1, roles: [{ role: 'moderator', uni_id: 1 }] }, 2: { uni_id: 1, roles: [] } });
   const res = mkRes();
   await a_addUserRole(req(1, { uid: 2 }, { uni_id: 1, role: 'admin' }), res);
@@ -75,7 +75,7 @@ test.failing('BUG A-ROLE-1: moderator must NOT be able to grant role "admin"', a
 
 // BUG A-ROLE-4: edit/remove only validate OLD role vs actor (isValidRoleEdit) and there is no "index<=1" gate:
 // a helper can rewrite their own helper role into admin.
-test.failing('BUG A-ROLE-4: helper must NOT be able to edit own helper role into admin', async () => {
+test('H2 A-ROLE-4: helper must NOT be able to edit own helper role into admin', async () => {
   world({ 3: { uni_id: 1, roles: [{ role: 'helper', uni_id: 1, fac_id: 1, major_id: null }] } });
   const res = mkRes();
   await a_editUserRole(req(3, { uid: 3 }, { old: { role: 'helper', uni_id: 1, fac_id: 1, major_id: null }, edit: { role: 'admin', uni_id: 1, fac_id: null, major_id: null } }), res);
@@ -92,11 +92,37 @@ test('delete: actor index must be >= role being removed and same university', as
   expect(res.code).toBe(200);
 });
 
-test('edit without old/edit body -> 500 Internal Server Error (no validation)', async () => {
+test('edit without old/edit body -> 400', async () => {
   world({ 1: { uni_id: 1, roles: [{ role: 'admin', uni_id: null }] } });
   const res = mkRes();
   await a_editUserRole(req(1, { uid: 2 }, {}), res);
-  expect(res.code).toBe(500);
+  expect(res.code).toBe(400);
+});
+
+test('H2: unknown role names are rejected on add/edit; moderator cannot grant moderator; admin may grant admin', async () => {
+  world({ 1: { uni_id: 1, roles: [{ role: 'moderator', uni_id: 1 }] }, 2: { uni_id: 1, roles: [] }, 9: { uni_id: 1, roles: [{ role: 'admin', uni_id: null }] } });
+  for (const role of ['superadmin', undefined, 'moderator', 'admin']) {
+    const res = mkRes();
+    await a_addUserRole(req(1, { uid: 2 }, { uni_id: 1, role }), res);
+    expect(res.code).toBe(403);
+  }
+  const res = mkRes();
+  await a_editUserRole(req(1, { uid: 2 }, { old: { role: 'helper', uni_id: 1, fac_id: 1 }, edit: { role: 'admin', uni_id: 1 } }), res);
+  expect(res.code).toBe(403);
+  const ok = mkRes();
+  await a_addUserRole(req(9, { uid: 2 }, { uni_id: 1, role: 'admin' }), ok);
+  expect(ok.code).toBe(201);
+  expect(inserts()).toHaveLength(1);
+});
+
+test('H2: plain user / helper cannot edit or delete roles', async () => {
+  world({ 3: { uni_id: 1, roles: [{ role: 'helper', uni_id: 1, fac_id: 1, major_id: null }] } });
+  let res = mkRes();
+  await a_deleteUserRole(req(3, { uid: 3 }, { uni_id: 1, fac_id: 1, major_id: null, role: 'helper' }), res);
+  expect(res.code).toBe(403);
+  res = mkRes();
+  await a_editUserRole(req(3, { uid: 3 }, { old: { role: 'helper', uni_id: 1, fac_id: 1 }, edit: { role: 'helper', uni_id: 1, fac_id: 1 } }), res);
+  expect(res.code).toBe(403);
 });
 
 test('add role for non-existent target uid -> 500 (targetUser null dereferenced)', async () => {

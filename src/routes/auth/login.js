@@ -39,7 +39,7 @@ async function authFromToken(req, res) {
         const bd = {
           body: {
             username: null,
-            password: "null",
+            password: crypto.randomBytes(32).toString("hex"),
             uni_id: 1,
             fac_id: await getFacIdFromFacNameTh(1, jwt_dc.facualty_th),
             major_id: null,
@@ -136,7 +136,7 @@ async function authFromToken(req, res) {
       const bd = {
         body: {
           username: null,
-          password: "null",
+          password: crypto.randomBytes(32).toString("hex"),
           uni_id: null,
           fac_id: null,
           major_id: null,
@@ -256,8 +256,41 @@ async function sendOTP(email) {
   }
 }
 
+// OTP lockout lives in Redis so replicas share it and restarts keep it: INCR + EXPIRE per lowercased email.
+// If Redis is down we FAIL SOFT to a per-process Map (budget degrades to per-replica, reset-on-restart) rather than
+// blocking every password reset during a Redis outage.
+const OTP_MAX_FAILS = 5;
+const OTP_LOCK_S = 15 * 60;
+const otpMem = new Map(); // email -> { n, until }  (fallback only)
+const otpKey = (email) => `planriean:otp_fails:${String(email).toLowerCase()}`;
+const memKey = (email) => String(email).toLowerCase();
+const redisClient = () => require("../../redis");
+const otpLocked = async (email) => {
+  try {
+    return Number(await redisClient().get(otpKey(email)) || 0) >= OTP_MAX_FAILS;
+  } catch (e) {
+    const f = otpMem.get(memKey(email));
+    return !!f && f.until > Date.now() && f.n >= OTP_MAX_FAILS;
+  }
+};
+const otpFail = async (email) => {
+  try {
+    await redisClient().multi().incr(otpKey(email)).expire(otpKey(email), OTP_LOCK_S).exec();
+  } catch (e) {
+    const f = otpMem.get(memKey(email));
+    otpMem.set(memKey(email), { n: f && f.until > Date.now() ? f.n + 1 : 1, until: Date.now() + OTP_LOCK_S * 1000 });
+  }
+};
+const otpReset = async (email) => {
+  otpMem.delete(memKey(email));
+  try { await redisClient().del(otpKey(email)); } catch (e) { /* redis down: nothing to reset there */ }
+};
+const otpTooMany = (res) =>
+  res.status(429).json({ success: false, message: "Too many attempts, try again later" });
+
 async function verifyOTP(req, res) {
   const { email, otp } = req.body;
+  if (await otpLocked(email)) return otpTooMany(res);
 
   // Get the stored hashed OTP
   const result = await db.query(
@@ -279,8 +312,10 @@ async function verifyOTP(req, res) {
         [new Date(Date.now() + 60 * 60 * 1000), email]
       );
 
+      await otpReset(email);
       res.json({ success: true, message: "OTP verified successfully" });
     } else {
+      await otpFail(email);
       res.status(400).json({ success: false, message: "Invalid OTP" });
     }
   } else {
@@ -290,6 +325,7 @@ async function verifyOTP(req, res) {
 
 async function changePassword(req, res) {
   const { email, otp, newPassword } = req.body;
+  if (await otpLocked(email)) return otpTooMany(res);
 
   // Get the stored hashed OTP
   const result = await db.query(
@@ -312,8 +348,10 @@ async function changePassword(req, res) {
         [hashedPass, email]
       );
 
+      await otpReset(email);
       res.json({ success: true, message: "Password updated successfully" });
     } else {
+      await otpFail(email);
       res.status(400).json({ success: false, message: "Invalid OTP" });
     }
   } else {
